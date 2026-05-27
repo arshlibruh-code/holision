@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Cut & Fill</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #08080c; }
+    canvas { display: block; }
+
+
+    #intro-overlay {
+      position: fixed;
+      inset: 0;
+      background: #08080c;
+      z-index: 100;
+      pointer-events: none;
+      transition: opacity 2.0s ease-out;
+      opacity: 1;
+    }
+    #intro-overlay.fade { opacity: 0; }
+
+    /* util strip */
+    .util-strip {
+      position:fixed; bottom:10px; right:10px;
+      display:flex; gap:6px; align-items:center;
+      pointer-events:all;
+    }
+    .util-btn {
+      font-size:12px; color:rgba(255,255,255,0.75);
+      border:1px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06);
+      padding:4px 9px; border-radius:2px; cursor:pointer; font-family:monospace;
+      transition:all 0.15s;
+    }
+    .util-btn.active { color:#fff; background:rgba(8,60,100,0.6); border-color:#089BDF; }
+
+    /* panel */
+    .panel-zone {
+      position:fixed; bottom:42px; right:10px;
+      pointer-events:all;
+    }
+    .panel-zone.hidden { display:none; }
+    .fp {
+      padding:8px 10px;
+      background:rgba(8,8,12,0.96);
+      border:1px solid rgba(255,255,255,0.09);
+      border-radius:3px;
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .fp-title { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(255,255,255,0.18); }
+    .fp-row { display:flex; gap:14px; align-items:center; min-height:28px; }
+    .grp { display:flex; flex-direction:column; gap:6px; }
+    .fc { display:flex; flex-direction:column; gap:4px; align-items:center; }
+    .fc-lbl { font-family:'Share Tech', sans-serif; font-size:10px; font-weight:700; color:rgba(255,255,255,0.3); letter-spacing:0.04em; text-transform:uppercase; white-space:nowrap; }
+    .fc-val { font-size:11px; color:rgba(255,255,255,0.6); }
+    .fc-val.cv { color:rgba(255,150,150,0.8); }
+    .fc-val.fv { color:rgba(90,200,255,0.8); }
+
+    /* custom slider row */
+    .csr {
+      position:relative; height:28px;
+      display:flex; align-items:center; padding:0 10px;
+      border:1px solid rgba(255,255,255,0.08); border-radius:2px;
+      overflow:hidden; cursor:pointer; user-select:none;
+    }
+    .csr-fill {
+      position:absolute; left:4px; top:4px; bottom:4px;
+      background:rgba(255,255,255,0.06); border-radius:1px;
+      border-right:1px solid rgba(255,255,255,0.22);
+      pointer-events:none;
+    }
+    .csr.cut-sl .csr-fill  { background:rgba(255,60,60,0.08);   border-right-color:rgba(255,120,120,0.45); }
+    .csr.fill-sl .csr-fill { background:rgba(8,155,223,0.08);   border-right-color:rgba(90,200,255,0.45); }
+    .csr:hover .csr-fill                { background:rgba(255,255,255,0.11); border-right-width:2px; border-right-color:rgba(255,255,255,0.45); }
+    .csr.cut-sl:hover .csr-fill  { background:rgba(255,60,60,0.14);  border-right-color:rgba(255,120,120,0.75); }
+    .csr.fill-sl:hover .csr-fill { background:rgba(8,155,223,0.14);  border-right-color:rgba(90,200,255,0.75); }
+    .csr-label {
+      position:relative; z-index:1; flex:1;
+      font-family:'Share Tech', sans-serif; font-size:10px; font-weight:700;
+      letter-spacing:0.04em; text-transform:uppercase;
+      color:rgba(255,255,255,0.3); pointer-events:none;
+    }
+    .csr-val {
+      position:relative; z-index:1;
+      font-family:'Share Tech Mono', monospace; font-size:11px;
+      color:rgba(255,255,255,0.6); pointer-events:none;
+    }
+    .csr.cut-sl  .csr-val { color:rgba(255,150,150,0.8); }
+    .csr.fill-sl .csr-val { color:rgba(90,200,255,0.8); }
+    .csr input[type=range] {
+      position:absolute; inset:0; opacity:0;
+      margin:0; cursor:pointer; z-index:2;
+    }
+
+    /* number input */
+    .ni {
+      width:40px; font-family:'Share Tech Mono', monospace; font-size:11px;
+      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+      color:rgba(255,255,255,0.6); padding:3px 5px; border-radius:2px; text-align:center;
+      -moz-appearance:textfield; outline:none;
+    }
+    .ni::-webkit-outer-spin-button, .ni::-webkit-inner-spin-button { opacity:0.3; }
+
+    /* color swatch */
+    .cs { width:18px; height:18px; border-radius:2px; border:1px solid rgba(255,255,255,0.15); cursor:pointer; flex-shrink:0; -webkit-appearance:none; padding:0; }
+    .cs::-webkit-color-swatch-wrapper { padding:0; }
+    .cs::-webkit-color-swatch { border:none; border-radius:1px; }
+    .csr .cs { position:relative; z-index:3; width:14px; height:14px; margin-right:7px; border-radius:2px; }
+
+    /* inline cluster */
+    .cl { display:flex; align-items:center; gap:5px; }
+    .cl-lbl { font-family:'Share Tech', sans-serif; font-size:10px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:rgba(255,255,255,0.25); white-space:nowrap; }
+
+    /* major buttons */
+    .maj-btns { display:flex; gap:3px; }
+    .maj { font-size:10px; padding:2px 6px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.3); border-radius:2px; cursor:pointer; font-family:'Share Tech Mono', monospace; transition:all 0.15s; }
+    .maj.active { border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.8); }
+
+    /* toggles */
+    .toggles { display:flex; gap:5px; flex-wrap:wrap; }
+    .tog { font-size:11px; padding:4px 11px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.35); border-radius:2px; cursor:pointer; white-space:nowrap; font-family:'Share Tech', sans-serif; font-weight:700; letter-spacing:0.04em; transition:all 0.15s; }
+    .tog[data-mode="cut"].active    { background:rgba(245,20,20,0.1);   border-color:rgba(255,80,80,0.5);   color:rgba(255,150,150,0.9); }
+    .tog[data-mode="fill"].active   { background:rgba(8,155,223,0.1);   border-color:rgba(8,155,223,0.5);   color:rgba(90,200,255,0.9); }
+    .tog[data-mode="ann"].active,
+    .tog[data-mode="contour"].active { background:rgba(255,255,255,0.12); border-color:rgba(255,255,255,0.35); color:rgba(255,255,255,0.85); }
+
+    /* ctrl button */
+    .ctrl-btn {
+      font-family:'Share Tech', sans-serif; font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+      color:rgba(255,255,255,0.5); background:transparent;
+      border:1px solid rgba(255,255,255,0.15); border-radius:2px;
+      padding:6px 14px; cursor:pointer; transition:all 0.15s;
+    }
+    .ctrl-btn.active { color:#fff; background:rgba(8,155,223,0.12); border-color:rgba(8,155,223,0.6); text-shadow:0 0 8px rgba(8,155,223,0.6); }
+    .ann-wrap {
+      position: relative;
+      width: 0; height: 0;
+      pointer-events: none;
+    }
+    .ann-label {
+      position: absolute;
+      left: 0; top: 50%;
+      transform: translate(10px, -50%);
+      color: rgba(255,255,255,0.85);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0,0,0.2,1);
+      border: 1px solid rgba(255,255,255,0.7);
+      padding: 2px 6px;
+      background: rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+      border-radius: 0;
+    }
+    .ann-label-left {
+      position: absolute;
+      right: 0; top: 50%;
+      transform: translate(-10px, -50%);
+      color: rgba(255,255,255,0.85);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0,0,0.2,1);
+      border: 1px solid rgba(255,255,255,0.7);
+      padding: 2px 6px;
+      background: rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+      border-radius: 0;
+    }
+    .ann-label-top {
+      position: absolute;
+      left: 50%; top: 0;
+      transform: translate(-50%, calc(-100% - 6px));
+      color: rgba(255,255,255,0.85);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0,0,0.2,1);
+      border: 1px solid rgba(255,80,80,0.9);
+      padding: 2px 6px;
+      background: rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+      border-radius: 0;
+    }
+    .ann-label-bottom {
+      position: absolute;
+      left: 50%; top: 0;
+      transform: translate(-50%, 6px);
+      color: rgba(255,255,255,0.85);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0,0,0.2,1);
+      border: 1px solid rgba(8,155,223,0.8);
+      padding: 2px 6px;
+      background: rgba(0,0,0,0.12);
+      backdrop-filter: blur(6px);
+      border-radius: 0;
+    }
+    .ann-lbl { font-family:'Share Tech', sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
+    .ann-val { font-family:'Share Tech Mono', monospace; margin-left:5px; letter-spacing:-0.03em; }
+    .contour-label {
+      position: absolute;
+      left: 0; top: 50%;
+      transform: translate(4px, -50%);
+      color: rgba(255,255,255,0.5);
+      font-family: monospace;
+      font-size: 10px;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0,0,0.2,1);
+    }
+    .ann-label-net {
+      position: absolute;
+      left: 0; top: 0;
+      transform: translate(-50%, -50%);
+      color: rgba(255,255,255,0.9);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0,0,0.2,1);
+      border: 1px solid rgba(255,255,255,0.7);
+      padding: 2px 6px;
+      background: rgba(0,0,0,0.25);
+      backdrop-filter: blur(6px);
+      border-radius: 0;
+    }
+    .credit {
+      position:fixed; bottom:10px; left:10px;
+      font-family:'Share Tech Mono', monospace; font-size:10px; letter-spacing:-0.05em;
+      color:rgba(255,255,255,0.15); text-decoration:none;
+      transition:color 0.2s; pointer-events:all;
+    }
+    .credit:hover { color:rgba(255,255,255,0.4); }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<div id="intro-overlay"></div>
+
+<a class="credit" href="https://github.com/arshlibruh" target="_blank" rel="noopener">@arshlibruh / holision</a>
+
+<div class="util-strip">
+  <button id="anim-btn" class="util-btn" title="animate base Y">▶</button>
+  <button id="spin-btn" class="util-btn" title="auto rotate">⟳</button>
+  <button class="ctrl-btn active" id="ctrl-toggle">Controls</button>
+</div>
+
+<div class="panel-zone" id="ctrl-panel">
+  <div class="fp">
+    <div class="grp">
+      <div class="toggles" id="mode-btns">
+        <button data-mode="cut"     class="tog active">Cut</button>
+        <button data-mode="fill"    class="tog active">Fill</button>
+        <button data-mode="ann"     class="tog active">Annotations</button>
+        <button data-mode="contour" class="tog active">Contour Labels</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Terrain</span>
+        <span class="csr-val" id="seed-label">0</span>
+        <input type="range" id="seed-slider" min="0" max="99" step="1" value="0">
+      </div>
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Design Level</span>
+        <span class="csr-val" id="base-label">0.10 m</span>
+        <input type="range" id="base-slider" min="-2" max="6" step="0.05" value="0.1">
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="csr cut-sl">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Cut Depth</span>
+        <span class="csr-val" id="offset-label">0.0 m</span>
+        <input type="range" id="offset-slider" min="0" max="20" step="0.05" value="0">
+      </div>
+      <div class="csr fill-sl">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Fill Depth</span>
+        <span class="csr-val" id="fill-offset-label">0.0 m</span>
+        <input type="range" id="fill-offset-slider" min="0" max="20" step="0.05" value="0">
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Wall Density</span>
+        <span class="csr-val" id="wall-label">0.50 m</span>
+        <input type="range" id="wall-slider" min="0.2" max="5" step="0.1" value="0.5">
+      </div>
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <input type="color" class="cs" id="wall-top-color" value="#ff0000">
+        <span class="csr-label">Top Color</span>
+        <span class="csr-val" id="wall-top-alpha-val">0.10</span>
+        <input type="range" id="wall-top-alpha" min="0" max="1" step="0.05" value="0.1">
+      </div>
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <input type="color" class="cs" id="wall-bot-color" value="#000000">
+        <span class="csr-label">Bottom Color</span>
+        <span class="csr-val" id="wall-bot-alpha-val">0.00</span>
+        <input type="range" id="wall-bot-alpha" min="0" max="1" step="0.05" value="0">
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Minor Interval</span>
+        <span class="csr-val" id="minor-label">0.15 m</span>
+        <input type="range" id="minor-slider" min="0.01" max="1.2" step="0.01" value="0.15">
+      </div>
+      <div class="fp-row" style="align-items:center;">
+        <div class="fc-lbl">Major Interval</div>
+        <div class="maj-btns" id="major-btns">
+          <button data-n="2"  class="maj">×2</button>
+          <button data-n="3"  class="maj">×3</button>
+          <button data-n="5"  class="maj">×5</button>
+          <button data-n="10" class="maj active">×10</button>
+        </div>
+      </div>
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <input type="color" class="cs" id="minor-color" value="#ffffff">
+        <span class="csr-label">Minor Lines</span>
+        <span class="csr-val" id="minor-opacity-val">0.12</span>
+        <input type="range" id="minor-opacity" min="0" max="1" step="0.05" value="0.12">
+      </div>
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <input type="color" class="cs" id="major-color" value="#ffffff">
+        <span class="csr-label">Major Lines</span>
+        <span class="csr-val" id="major-opacity-val">1.00</span>
+        <input type="range" id="major-opacity" min="0" max="1" step="0.05" value="1">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import Stats from 'three/addons/libs/stats.module.js';
+  import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+  function hash(x, y, s) {
+    const n = Math.sin(x * 127.1 + y * 311.7 + s * 53.17) * 43758.5453;
+    return n - Math.floor(n);
+  }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  const eio = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+  function vnoise(x, y, s) {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    const fx = x - ix, fy = y - iy;
+    const a = hash(ix, iy, s), b = hash(ix+1, iy, s);
+    const c = hash(ix, iy+1, s), d = hash(ix+1, iy+1, s);
+    const ux = smooth(fx), uy = smooth(fy);
+    return a + (b-a)*ux + (c-a)*uy + (a-b-c+d)*ux*uy;
+  }
+  function fbm(x, y, s) {
+    return vnoise(x,y,s)*0.5 + vnoise(x*2,y*2,s)*0.25 + vnoise(x*4,y*4,s)*0.125;
+  }
+
+  const stats = new Stats();
+  stats.dom.style.position = 'fixed';
+  stats.dom.style.top = '0';
+  stats.dom.style.left = '0';
+  stats.dom.style.transform = 'scale(0.6)';
+  stats.dom.style.transformOrigin = 'top left';
+  document.body.appendChild(stats.dom);
+
+  const labelRenderer = new CSS2DRenderer();
+  labelRenderer.setSize(innerWidth, innerHeight);
+  labelRenderer.domElement.style.position = 'fixed';
+  labelRenderer.domElement.style.top = '0';
+  labelRenderer.domElement.style.left = '0';
+  labelRenderer.domElement.style.pointerEvents = 'none';
+  document.body.appendChild(labelRenderer.domElement);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  document.body.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x08080c);
+  scene.fog = new THREE.Fog(0x08080c, 38, 62);
+
+  const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
+  camera.position.set(0, 22, 40);
+  camera.lookAt(0, 3, 0);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.autoRotate = false;
+  controls.autoRotateSpeed = 2.0;
+  controls.target.set(0, 3, 0);
+  controls.minDistance = 8;
+  controls.maxDistance = 85;
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const sun = new THREE.DirectionalLight(0xfff5e0, 1.4);
+  sun.position.set(6, 12, 6);
+  scene.add(sun);
+
+  let baseLeader, peakLeader, lowLeader, groundLeader, baseAnn, peakAnn, lowAnn, groundAnn, cutAnn, fillAnn, netAnn;
+  let cutBranches, cutTrunk, fillBranches, fillTrunk;
+  const cutTrunkMid  = new THREE.Vector3();
+  const fillTrunkMid = new THREE.Vector3();
+  let cutAnnActive = false, fillAnnActive = false;
+  let showAnns = true, showContours = true;
+  let netLineAlpha = 0, netLineTgt = 0, prevTs = 0;
+  let annFade = 1, annFadeTgt = 1;
+  let cutTotalVol = 0, fillTotalVol = 0;
+  const annDirData = {
+    base:   { v2: new THREE.Vector3(), v3: new THREE.Vector3(), div: null, dir: 0, flipping: false },
+    peak:   { v2: new THREE.Vector3(), v3: new THREE.Vector3(), div: null, dir: 0, flipping: false },
+    low:    { v2: new THREE.Vector3(), v3: new THREE.Vector3(), div: null, dir: 0, flipping: false },
+    ground: { v2: new THREE.Vector3(), v3: new THREE.Vector3(), div: null, dir: 0, flipping: false },
+    cut:    { v2: new THREE.Vector3(), v3: new THREE.Vector3(), div: null, dir: 0, flipping: false },
+  };
+  let contourCandidates = [];
+  let contourLabelPool = [];
+  let cwu, fwu;
+  let ghostGroup, ghostFillGroup, cutBaseGroup;
+
+  const DEPTH_SCALE = 4;
+  let dtW = Math.ceil(innerWidth  / DEPTH_SCALE);
+  let dtH = Math.ceil(innerHeight / DEPTH_SCALE);
+  const depthTarget = new THREE.WebGLRenderTarget(dtW, dtH);
+  const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking, side: THREE.DoubleSide });
+  let depthBuffer = new Uint8Array(dtW * dtH * 4);
+  let depthReady = false;
+
+  // BasicDepthPacking stores (1 - fragCoordZ) in R — close = bright, far = dark
+  function sampleSceneDepth(sx, sy) {
+    if (!depthReady) return 1;
+    const tx = Math.min(dtW - 1, Math.max(0, Math.floor(sx / DEPTH_SCALE)));
+    const ty = Math.min(dtH - 1, Math.max(0, Math.floor((innerHeight - sy) / DEPTH_SCALE)));
+    return 1 - depthBuffer[(ty * dtW + tx) * 4] / 255;
+  }
+
+  const SIZE = 22;
+  const SEG = 140;
+  const CELL_AREA = (SIZE / SEG) ** 2;
+  const UNIT_SCALE = 10;   // 1 internal unit = 10 m
+  const VOL_SCALE  = UNIT_SCALE ** 3;
+  let CUT_OFFSET = 0.0;
+  let FILL_OFFSET = 0.0;
+  const TARGET_CUT_OFFSET = 10.0;
+  let BASE_Y = 0.10;
+  let showCut = true, showFill = true;
+  function computeViewMode() {
+    if (showCut  && showFill)  return 0;
+    if (showCut  && !showFill) return 1;
+    if (!showCut && showFill)  return 2;
+    return 3;
+  }
+  let SEED = 0;
+
+  // terrain material — PBR with fragment-shader cut/fill boundary
+  let terrainShader = null;
+  const terrainMat = new THREE.MeshPhysicalMaterial({
+    side: THREE.DoubleSide,
+    roughness: 0.8,
+    metalness: 0.0,
+    clearcoat: 0.1,
+    clearcoatRoughness: 0.4,
+    transparent: true,
+  });
+
+  terrainMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uBaseY    = { value: BASE_Y };
+    shader.uniforms.uViewMode = { value: 0 };
+    terrainShader = shader;
+
+    // pass terrain Y as varying
+    shader.vertexShader = 'varying float vTerrainY;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\nvTerrainY = position.y;'
+    );
+
+    // per-fragment cut/fill color decision
+    shader.fragmentShader = 'varying float vTerrainY;\nuniform float uBaseY;\nuniform int uViewMode;\n' + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      `
+      vec3 cutCol   = vec3(0.96, 0.08, 0.08);
+      vec3 fillCol  = vec3(0.0, 0.278, 0.671);
+      vec3 mutedCol = vec3(0.06, 0.06, 0.09);
+      bool isCut = vTerrainY > uBaseY;
+      vec3 zoneCol;
+      if (uViewMode == 1)      zoneCol = isCut ? cutCol   : mutedCol;
+      else if (uViewMode == 2) zoneCol = isCut ? mutedCol : fillCol;
+      else if (uViewMode == 3) zoneCol = mutedCol;
+      else                     zoneCol = isCut ? cutCol   : fillCol;
+      diffuseColor.rgb = zoneCol;
+      diffuseColor.a = isCut ? 1.0 : 0.55;
+      `
+    );
+  };
+
+  // geometry
+  const terrainGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+  terrainGeo.rotateX(-Math.PI / 2);
+  const baseGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+  baseGeo.rotateX(-Math.PI / 2);
+
+  const tPos = terrainGeo.attributes.position;
+  const bPos = baseGeo.attributes.position;
+  const heights = new Float32Array(tPos.count);
+
+  const cutWallGeo   = new THREE.BufferGeometry();
+  const fillWallGeo  = new THREE.BufferGeometry();
+  const cutBaseGeo   = new THREE.BufferGeometry();
+  const contourGeo   = new THREE.BufferGeometry();
+  const cutBranchGeo  = new THREE.BufferGeometry();
+  const cutTrunkGeo   = new THREE.BufferGeometry();
+  cutTrunkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const fillBranchGeo = new THREE.BufferGeometry();
+  const fillTrunkGeo  = new THREE.BufferGeometry();
+  fillTrunkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const netCutGeo  = new THREE.BufferGeometry();
+  netCutGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const netFillGeo = new THREE.BufferGeometry();
+  netFillGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(18), 3));
+
+  // cache X/Z since they never change
+  const txCache = new Float32Array(tPos.count);
+  const tzCache = new Float32Array(tPos.count);
+  for (let i = 0; i < tPos.count; i++) {
+    txCache[i] = tPos.getX(i);
+    tzCache[i] = tPos.getZ(i);
+  }
+
+  // pre-build triangle adjacency (static — terrain topology never changes)
+  const srcIdx = terrainGeo.index.array;
+  const numTris = srcIdx.length / 3;
+  const triNeighbors = Array.from({ length: numTris }, () => []);
+  {
+    const edgeMap = new Map();
+    for (let t = 0; t < numTris; t++) {
+      const a = srcIdx[t*3], b = srcIdx[t*3+1], c = srcIdx[t*3+2];
+      for (const [p, q] of [[a,b],[b,c],[c,a]]) {
+        const k = p < q ? p * 25000 + q : q * 25000 + p;
+        if (edgeMap.has(k)) {
+          const o = edgeMap.get(k);
+          triNeighbors[t].push(o);
+          triNeighbors[o].push(t);
+        } else {
+          edgeMap.set(k, t);
+        }
+      }
+    }
+  }
+
+  function rebuildTerrain(seed) {
+    for (let i = 0; i < tPos.count; i++) {
+      const x = tPos.getX(i), z = tPos.getZ(i);
+      const noise = (fbm(x * 0.38, z * 0.38, seed) - 0.5) * 2.8;
+      const d2 = x*x + z*z;
+      heights[i] = noise + Math.exp(-d2 * 0.055) * 5.5;
+      tPos.setY(i, heights[i]);
+    }
+    tPos.needsUpdate = true;
+    terrainGeo.computeVertexNormals();
+  }
+
+  for (let i = 0; i < bPos.count; i++) bPos.setY(i, BASE_Y);
+
+  rebuildTerrain(SEED);
+  baseGeo.computeVertexNormals();
+
+  function rebuildContour(baseY) {
+    const srcIdx = terrainGeo.index.array;
+    const verts = [];
+    const ringVerts = [];
+    const wallPts = [];
+
+    for (let i = 0; i < srcIdx.length; i += 3) {
+      const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
+      const ha = heights[a], hb = heights[b], hc = heights[c];
+
+      const pts = [];
+      for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
+        if ((hp < baseY) !== (hq < baseY)) {
+          const t = (baseY - hp) / (hq - hp);
+          pts.push(
+            txCache[p] + t * (txCache[q] - txCache[p]),
+            tzCache[p] + t * (tzCache[q] - tzCache[p])
+          );
+        }
+      }
+
+      if (pts.length === 4) {
+        verts.push(pts[0], baseY + 0.02, pts[1], pts[2], baseY + 0.02, pts[3]);
+        ringVerts.push(pts[0], baseY, pts[1], pts[2], baseY, pts[3]);
+        wallPts.push(pts[0], pts[1], pts[2], pts[3]);
+      }
+    }
+
+    const wallVerts = [], wallGrads = [];
+    const fillWallVerts = [], fillWallGrads = [];
+    const placed = [];
+    const minD2 = wallSpacing * wallSpacing;
+    for (let i = 0; i < wallPts.length; i += 2) {
+      const wx = wallPts[i], wz = wallPts[i + 1];
+      let tooClose = false;
+      for (let j = 0; j < placed.length; j += 2) {
+        const dx = wx - placed[j], dz = wz - placed[j + 1];
+        if (dx*dx + dz*dz < minD2) { tooClose = true; break; }
+      }
+      if (!tooClose) {
+        wallVerts.push(wx, baseY, wz,  wx, baseY, wz);
+        wallGrads.push(0, 1);
+        fillWallVerts.push(wx, baseY, wz,  wx, baseY, wz);
+        fillWallGrads.push(0, 1);
+        placed.push(wx, wz);
+      }
+    }
+
+    contourGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+    cutBaseGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ringVerts), 3));
+    cutWallGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(wallVerts), 3));
+    cutWallGeo.setAttribute('grad', new THREE.BufferAttribute(new Float32Array(wallGrads), 1));
+    fillWallGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(fillWallVerts), 3));
+    fillWallGeo.setAttribute('grad', new THREE.BufferAttribute(new Float32Array(fillWallGrads), 1));
+  }
+
+  let MINOR_INTERVAL = 0.05;
+  let wallSpacing = 0.5;
+  let MAJOR_N = 10;
+
+  const ghostMinorGeo     = new THREE.BufferGeometry();
+  const ghostMajorGeo     = new THREE.BufferGeometry();
+  const ghostFillMinorGeo = new THREE.BufferGeometry();
+  const ghostFillMajorGeo = new THREE.BufferGeometry();
+
+  function rebuildGhostViz(baseY) {
+    const srcIdx = terrainGeo.index.array;
+    const minorVerts = [];
+    const majorVerts = [];
+
+    let gMin = Infinity, gMax = -Infinity;
+    for (let i = 0; i < tPos.count; i++) {
+      if (heights[i] > baseY) {
+        gMin = Math.min(gMin, heights[i]);
+        gMax = Math.max(gMax, heights[i]);
+      }
+    }
+
+    const majorInterval = MINOR_INTERVAL * MAJOR_N;
+    const startLevel = Math.ceil(gMin / MINOR_INTERVAL) * MINOR_INTERVAL;
+
+    for (let level = startLevel; level <= gMax + 1e-6; level += MINOR_INTERVAL) {
+      const isMajor = Math.abs(Math.round(level / majorInterval) * majorInterval - level) < MINOR_INTERVAL * 0.01;
+      const target = isMajor ? majorVerts : minorVerts;
+      const levelCandidates = [];
+
+      for (let i = 0; i < srcIdx.length; i += 3) {
+        const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
+        if (!(heights[a] > baseY && heights[b] > baseY && heights[c] > baseY)) continue;
+        const ha = heights[a], hb = heights[b], hc = heights[c];
+        const pts = [];
+        for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
+          if ((hp < level) !== (hq < level)) {
+            const t = (level - hp) / (hq - hp);
+            pts.push(txCache[p] + t*(txCache[q]-txCache[p]), level, tzCache[p] + t*(tzCache[q]-tzCache[p]));
+          }
+        }
+        if (pts.length === 6) {
+          target.push(...pts);
+          if (isMajor) {
+            const mx = (pts[0]+pts[3])/2, mz = (pts[2]+pts[5])/2;
+            let ok = true;
+            for (const c of levelCandidates) {
+              const dx = mx-c[0], dz = mz-c[1];
+              if (dx*dx + dz*dz < 2.25) { ok = false; break; } // 1.5m world dedup
+            }
+            if (ok) levelCandidates.push([mx, mz]);
+          }
+        }
+      }
+
+      for (const [cx, cz] of levelCandidates) {
+        contourCandidates.push({ x: cx, y: level, z: cz, level, type: 'cut' });
+      }
+    }
+
+    ghostMinorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(minorVerts), 3));
+    ghostMajorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(majorVerts), 3));
+  }
+
+  function rebuildFillGhostViz(baseY) {
+    const srcIdx = terrainGeo.index.array;
+    const minorVerts = [], majorVerts = [];
+
+    let gMin = Infinity, gMax = -Infinity;
+    for (let i = 0; i < tPos.count; i++) {
+      if (heights[i] < baseY) {
+        gMin = Math.min(gMin, heights[i]);
+        gMax = Math.max(gMax, heights[i]);
+      }
+    }
+    if (gMin === Infinity) {
+      ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      return;
+    }
+
+    const majorInterval = MINOR_INTERVAL * MAJOR_N;
+    const startLevel = Math.ceil(gMin / MINOR_INTERVAL) * MINOR_INTERVAL;
+
+    for (let level = startLevel; level <= gMax + 1e-6; level += MINOR_INTERVAL) {
+      const isMajor = Math.abs(Math.round(level / majorInterval) * majorInterval - level) < MINOR_INTERVAL * 0.01;
+      const target = isMajor ? majorVerts : minorVerts;
+      const levelCandidates = [];
+
+      for (let i = 0; i < srcIdx.length; i += 3) {
+        const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
+        if (!(heights[a] < baseY && heights[b] < baseY && heights[c] < baseY)) continue;
+        const ha = heights[a], hb = heights[b], hc = heights[c];
+        const pts = [];
+        for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
+          if ((hp < level) !== (hq < level)) {
+            const t = (level - hp) / (hq - hp);
+            pts.push(txCache[p] + t*(txCache[q]-txCache[p]), level, tzCache[p] + t*(tzCache[q]-tzCache[p]));
+          }
+        }
+        if (pts.length === 6) {
+          target.push(...pts);
+          if (isMajor) {
+            const mx = (pts[0]+pts[3])/2, mz = (pts[2]+pts[5])/2;
+            let ok = true;
+            for (const c of levelCandidates) {
+              const dx = mx-c[0], dz = mz-c[1];
+              if (dx*dx + dz*dz < 2.25) { ok = false; break; }
+            }
+            if (ok) levelCandidates.push([mx, mz]);
+          }
+        }
+      }
+      for (const [cx, cz] of levelCandidates) {
+        contourCandidates.push({ x: cx, y: level, z: cz, level, type: 'fill' });
+      }
+    }
+
+    ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(minorVerts), 3));
+    ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(majorVerts), 3));
+  }
+
+  function makeGlowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0,    'rgba(255,255,255,1)');
+    grad.addColorStop(0.25, 'rgba(255,255,255,0.6)');
+    grad.addColorStop(1,    'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function setLineDistances(geo) {
+    const pos = geo.attributes.position;
+    const n = pos.count;
+    if (n === 0) return;
+    const d = new Float32Array(n);
+    for (let i = 0; i < n; i += 2) {
+      d[i] = 0;
+      if (i + 1 < n) {
+        const dx = pos.getX(i+1)-pos.getX(i);
+        const dy = pos.getY(i+1)-pos.getY(i);
+        const dz = pos.getZ(i+1)-pos.getZ(i);
+        d[i+1] = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      }
+    }
+    geo.setAttribute('lineDistance', new THREE.BufferAttribute(d, 1));
+  }
+
+  function detectIslands(baseY) {
+    const visited = new Uint8Array(numTris);
+    const islands = [];
+    for (let start = 0; start < numTris; start++) {
+      const a = srcIdx[start*3], b = srcIdx[start*3+1], c = srcIdx[start*3+2];
+      if (visited[start] || !(heights[a] > baseY && heights[b] > baseY && heights[c] > baseY)) continue;
+      const queue = [start];
+      visited[start] = 1;
+      const verts = new Set();
+      let qi = 0;
+      while (qi < queue.length) {
+        const t = queue[qi++];
+        const ta = srcIdx[t*3], tb = srcIdx[t*3+1], tc = srcIdx[t*3+2];
+        verts.add(ta); verts.add(tb); verts.add(tc);
+        for (const nt of triNeighbors[t]) {
+          if (visited[nt]) continue;
+          const na = srcIdx[nt*3], nb = srcIdx[nt*3+1], nc = srcIdx[nt*3+2];
+          if (heights[na] > baseY && heights[nb] > baseY && heights[nc] > baseY) {
+            visited[nt] = 1;
+            queue.push(nt);
+          }
+        }
+      }
+      let vol = 0, maxH = -Infinity, maxV = -1;
+      for (const v of verts) {
+        vol += (heights[v] - baseY) * CELL_AREA;
+        if (heights[v] > maxH) { maxH = heights[v]; maxV = v; }
+      }
+      islands.push({ cx: txCache[maxV], cy: maxH + CUT_OFFSET, cz: tzCache[maxV], vol });
+    }
+    return islands;
+  }
+
+  function rebuildCutAnnotation(baseY) {
+    if (!cutAnn) return;
+    const islands = detectIslands(baseY);
+    if (islands.length === 0) {
+      cutBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      const tp = cutTrunkGeo.attributes.position;
+      tp.setXYZ(0,0,0,0); tp.setXYZ(1,0,0,0); tp.setXYZ(2,0,0,0);
+      tp.needsUpdate = true;
+      cutAnn.div.style.opacity = '0';
+      cutHalo.visible = false;
+      cutAnnActive = false;
+      return;
+    }
+
+    const totalVol = islands.reduce((s, i) => s + i.vol, 0);
+    const CONV_LIFT = 5.0;
+    let convX = 0, convZ = 0;
+    for (const isl of islands) { convX += isl.cx; convZ += isl.cz; }
+    convX /= islands.length; convZ /= islands.length;
+    const convY = islands.length > 1
+      ? Math.max(...islands.map(i => i.cy)) + CONV_LIFT
+      : islands[0].cy;
+
+    // branches only when multiple islands — vertical up then diagonal to convergence
+    if (islands.length > 1) {
+      const VERT_LIFT = 2.5;
+      const bv = [];
+      for (const isl of islands) {
+        const kx = isl.cx, ky = isl.cy + VERT_LIFT, kz = isl.cz;
+        bv.push(isl.cx, isl.cy, isl.cz,  kx, ky, kz);   // vertical
+        bv.push(kx, ky, kz,  convX, convY, convZ);        // diagonal
+      }
+      cutBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bv), 3));
+    } else {
+      cutBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+    }
+
+    // vertical trunk straight up from convergence point
+    const trunkTopY = convY + 2.5;
+    const tp = cutTrunkGeo.attributes.position;
+    tp.setXYZ(0, convX, convY, convZ);
+    tp.setXYZ(1, convX, trunkTopY, convZ);
+    tp.needsUpdate = true;
+    cutAnn.obj.position.set(convX, trunkTopY, convZ);
+    cutAnn.lbl.textContent = 'Cut'; cutAnn.val.textContent = `${Math.round(totalVol * VOL_SCALE).toLocaleString()} m³`;
+    cutAnn.div.style.opacity = '1';
+    cutTrunkMid.set(convX, (convY + trunkTopY) / 2, convZ);
+    cutHalo.position.set(convX, convY, convZ);
+    cutHalo.visible = true;
+    cutAnnActive = true;
+    cutTotalVol = totalVol;
+    setLineDistances(cutBranchGeo);
+    setLineDistances(cutTrunkGeo);
+  }
+
+  function detectFillIslands(baseY) {
+    const visited = new Uint8Array(numTris);
+    const islands = [];
+    for (let start = 0; start < numTris; start++) {
+      const a = srcIdx[start*3], b = srcIdx[start*3+1], c = srcIdx[start*3+2];
+      if (visited[start] || !(heights[a] < baseY && heights[b] < baseY && heights[c] < baseY)) continue;
+      const queue = [start];
+      visited[start] = 1;
+      const verts = new Set();
+      let qi = 0;
+      while (qi < queue.length) {
+        const t = queue[qi++];
+        const ta = srcIdx[t*3], tb = srcIdx[t*3+1], tc = srcIdx[t*3+2];
+        verts.add(ta); verts.add(tb); verts.add(tc);
+        for (const nt of triNeighbors[t]) {
+          if (visited[nt]) continue;
+          const na = srcIdx[nt*3], nb = srcIdx[nt*3+1], nc = srcIdx[nt*3+2];
+          if (heights[na] < baseY && heights[nb] < baseY && heights[nc] < baseY) {
+            visited[nt] = 1; queue.push(nt);
+          }
+        }
+      }
+      let vol = 0, minH = Infinity, minV = -1;
+      for (const v of verts) {
+        vol += (baseY - heights[v]) * CELL_AREA;
+        if (heights[v] < minH) { minH = heights[v]; minV = v; }
+      }
+      islands.push({ cx: txCache[minV], cy: minH - FILL_OFFSET, cz: tzCache[minV], vol });
+    }
+    return islands;
+  }
+
+  function rebuildFillAnnotation(baseY) {
+    if (!fillAnn) return;
+    const islands = detectFillIslands(baseY);
+    if (islands.length === 0) {
+      fillBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      const tp = fillTrunkGeo.attributes.position;
+      tp.setXYZ(0,0,0,0); tp.setXYZ(1,0,0,0); tp.needsUpdate = true;
+      fillAnn.div.style.opacity = '0';
+      fillHalo.visible = false;
+      fillAnnActive = false;
+      return;
+    }
+    const totalVol = islands.reduce((s, i) => s + i.vol, 0);
+    let convX = 0, convZ = 0;
+    for (const isl of islands) { convX += isl.cx; convZ += isl.cz; }
+    convX /= islands.length; convZ /= islands.length;
+    const convY = islands.length > 1
+      ? Math.min(...islands.map(i => i.cy)) - 5.0
+      : islands[0].cy;
+
+    if (islands.length > 1) {
+      const bv = [];
+      for (const isl of islands) {
+        const kx = isl.cx, ky = isl.cy - 2.5, kz = isl.cz;
+        bv.push(isl.cx, isl.cy, isl.cz,  kx, ky, kz);
+        bv.push(kx, ky, kz,  convX, convY, convZ);
+      }
+      fillBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bv), 3));
+    } else {
+      fillBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+    }
+
+    const trunkBotY = convY - 2.5;
+    const tp = fillTrunkGeo.attributes.position;
+    tp.setXYZ(0, convX, convY,    convZ);
+    tp.setXYZ(1, convX, trunkBotY, convZ);
+    tp.needsUpdate = true;
+    fillAnn.obj.position.set(convX, trunkBotY, convZ);
+    fillAnn.lbl.textContent = 'Fill'; fillAnn.val.textContent = `${Math.round(totalVol * VOL_SCALE).toLocaleString()} m³`;
+    fillAnn.div.style.opacity = '1';
+    fillTrunkMid.set(convX, (convY + trunkBotY) / 2, convZ);
+    fillHalo.position.set(convX, convY, convZ);
+    fillHalo.visible = true;
+    fillAnnActive = true;
+    fillTotalVol = totalVol;
+    setLineDistances(fillBranchGeo);
+    setLineDistances(fillTrunkGeo);
+  }
+
+  let lastBaseY = -Infinity;
+
+  function applyBase(baseY) {
+    const baseChanged = baseY !== lastBaseY;
+    lastBaseY = baseY;
+
+    let cutVol = 0, fillVol = 0;
+    for (let i = 0; i < tPos.count; i++) {
+      bPos.setY(i, baseY);
+      const diff = heights[i] - baseY;
+      if (diff > 0) cutVol  += diff;
+      else          fillVol += -diff;
+    }
+    bPos.needsUpdate = true;
+    baseGeo.computeVertexNormals();
+
+    if (baseChanged) {
+      contourCandidates.length = 0;
+      rebuildGhostViz(baseY);
+      rebuildFillGhostViz(baseY);
+      rebuildContour(baseY);
+      rebuildCutAnnotation(baseY);
+      rebuildFillAnnotation(baseY);
+    } else if (!baseChanged) {
+      applyOffsetFastPath();
+    }
+
+    if (ghostGroup) {
+      ghostGroup.position.y = CUT_OFFSET;
+      ghostFillGroup.position.y = -FILL_OFFSET;
+      cutBaseGroup.position.y = CUT_OFFSET;
+    }
+
+    if (terrainShader) {
+      terrainShader.uniforms.uBaseY.value    = baseY;
+      terrainShader.uniforms.uViewMode.value = computeViewMode();
+    }
+    if (cwu) {
+      cwu.uBaseY.value = baseY;
+      fwu.uBaseY.value = baseY;
+      cwu.uCutOffset.value = CUT_OFFSET;
+      fwu.uCutOffset.value = CUT_OFFSET;
+      cwu.uFillOffset.value = FILL_OFFSET;
+      fwu.uFillOffset.value = FILL_OFFSET;
+    }
+
+    const cut  = cutVol  * CELL_AREA;
+    const fill = fillVol * CELL_AREA;
+    if (baseLeader) {
+      updateAnnotations(baseY);
+      syncContourLabels();
+    }
+  }
+
+  function applyOffsetFastPath() {
+    const dc = CUT_OFFSET - (ghostGroup.position.y || 0);
+    const df = FILL_OFFSET - (-(ghostFillGroup.position.y || 0));
+
+    if (cutAnnActive && cutTrunkMid.length() > 0) {
+      cutTrunkMid.y += dc;
+      const ctp = cutTrunkGeo.attributes.position;
+      for (let i = 0; i < ctp.count; i++) { ctp.setY(i, ctp.getY(i) + dc); }
+      ctp.needsUpdate = true;
+      cutHalo.position.y += dc;
+      if (cutAnn) cutAnn.obj.position.y += dc;
+      const cbp = cutBranchGeo.attributes.position;
+      if (cbp.count > 0) {
+        const maxYIdx = cbp.count - 1;
+        for (let i = 0; i < cbp.count; i++) { cbp.setY(i, cbp.getY(i) + dc); }
+        cbp.needsUpdate = true;
+      }
+    }
+
+    if (fillAnnActive && fillTrunkMid.length() > 0) {
+      fillTrunkMid.y -= df;
+      const ftp = fillTrunkGeo.attributes.position;
+      for (let i = 0; i < ftp.count; i++) { ftp.setY(i, ftp.getY(i) - df); }
+      ftp.needsUpdate = true;
+      fillHalo.position.y -= df;
+      if (fillAnn) fillAnn.obj.position.y -= df;
+      const fbp = fillBranchGeo.attributes.position;
+      if (fbp.count > 0) {
+        for (let i = 0; i < fbp.count; i++) { fbp.setY(i, fbp.getY(i) - df); }
+        fbp.needsUpdate = true;
+      }
+    }
+  }
+
+  applyBase(BASE_Y);
+
+  // annotations
+  const annMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
+
+  function makeLeader() {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+    const line = new THREE.Line(geo, annMat);
+    return { geo, line };
+  }
+
+  function makeCSS2DLabel(text, cls = 'ann-label') {
+    const wrap = document.createElement('div');
+    wrap.className = 'ann-wrap';
+    const div = document.createElement('div');
+    div.className = cls;
+    const lbl = document.createElement('span'); lbl.className = 'ann-lbl';
+    const val = document.createElement('span'); val.className = 'ann-val';
+    const parts = text.split(/  (.+)/); lbl.textContent = parts[0]; val.textContent = parts[1] || '';
+    div.appendChild(lbl); div.appendChild(val);
+    wrap.appendChild(div);
+    const obj = new CSS2DObject(wrap);
+    return { div, obj, lbl, val };
+  }
+
+  baseLeader   = makeLeader();
+  baseAnn      = makeCSS2DLabel('Base  0.00 m');
+  peakLeader   = makeLeader();
+  peakAnn      = makeCSS2DLabel('Peak  0.00 m');
+  lowLeader    = makeLeader();
+  lowAnn       = makeCSS2DLabel('Low  0.00 m', 'ann-label-left');
+  groundLeader = makeLeader();
+
+  groundAnn = makeCSS2DLabel('Ground  0.00 m', 'ann-label-left');
+
+  scene.add(baseLeader.line);
+  scene.add(baseAnn.obj);
+  scene.add(peakLeader.line);
+  scene.add(peakAnn.obj);
+  scene.add(lowLeader.line);
+  scene.add(lowAnn.obj);
+  scene.add(groundLeader.line);
+  scene.add(groundAnn.obj);
+
+  cutAnn = makeCSS2DLabel('Cut  0.0 m³', 'ann-label-top');
+  cutAnn.div.style.opacity = '0';
+  fillAnn = makeCSS2DLabel('Fill  0.0 m³', 'ann-label-bottom');
+  fillAnn.div.style.opacity = '0';
+
+  const dashTime = { value: 0 };
+  const DASH_SIZE = 0.12, GAP_SIZE = 0.08;
+  const DASH_TOTAL = DASH_SIZE + GAP_SIZE;
+  const _dashVS = `
+    attribute float lineDistance;
+    varying float vDist;
+    void main() {
+      vDist = lineDistance;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+  const _dashFS = `
+    uniform vec3 uColor;
+    uniform float uOpacity;
+    uniform float uDash;
+    uniform float uTotal;
+    uniform float uTime;
+    uniform float uDir;
+    varying float vDist;
+    void main() {
+      if (mod(vDist + uDir * uTime, uTotal) > uDash) discard;
+      gl_FragColor = vec4(uColor, uOpacity);
+      #include <colorspace_fragment>
+    }
+  `;
+  function makeDashMat(hex, opacity, dir) {
+    return new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: {
+        uTime: dashTime,
+        uColor: { value: new THREE.Color(hex) },
+        uOpacity: { value: opacity },
+        uDash: { value: DASH_SIZE },
+        uTotal: { value: DASH_TOTAL },
+        uDir: { value: dir },
+      },
+      vertexShader: _dashVS,
+      fragmentShader: _dashFS,
+    });
+  }
+  const cutBranchMat  = makeDashMat(0xff2020, 0.4, -1.0);
+  const cutTrunkMat   = makeDashMat(0xff2020, 0.7, -1.0);
+  const fillBranchMat = makeDashMat(0x089bdf, 0.4, -1.0);
+  const fillTrunkMat  = makeDashMat(0x089bdf, 0.7, -1.0);
+  cutBranches  = new THREE.LineSegments(cutBranchGeo,  cutBranchMat);
+  cutTrunk     = new THREE.Line(cutTrunkGeo,           cutTrunkMat);
+  fillBranches = new THREE.LineSegments(fillBranchGeo, fillBranchMat);
+  fillTrunk    = new THREE.Line(fillTrunkGeo,          fillTrunkMat);
+  scene.add(cutBranches);
+  scene.add(cutTrunk);
+  scene.add(cutAnn.obj);
+  scene.add(fillBranches);
+  scene.add(fillTrunk);
+  scene.add(fillAnn.obj);
+
+  const glowTex = makeGlowTexture();
+  const cutNodeMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xff2020, emissive: 0xff2020, emissiveIntensity: 0.8, roughness: 0.3, transparent: true })
+  );
+  cutNodeMesh.visible = false;
+  const cutHaloMat = new THREE.SpriteMaterial({
+    map: glowTex, color: 0xff3030,
+    blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
+  });
+  const cutHalo = new THREE.Sprite(cutHaloMat);
+  cutHalo.scale.set(0.8, 0.8, 1);
+  cutHalo.visible = false;
+
+  const fillNodeMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x089bdf, emissive: 0x089bdf, emissiveIntensity: 0.8, roughness: 0.3, transparent: true })
+  );
+  fillNodeMesh.visible = false;
+  const fillHaloMat = new THREE.SpriteMaterial({
+    map: glowTex, color: 0x089bdf,
+    blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9,
+  });
+  const fillHalo = new THREE.Sprite(fillHaloMat);
+  fillHalo.scale.set(0.8, 0.8, 1);
+  fillHalo.visible = false;
+
+  scene.add(cutHalo);
+  scene.add(fillHalo);
+
+  netAnn = makeCSS2DLabel('Net  0.0 m³', 'ann-label-net');
+  netAnn.div.style.opacity = '0';
+  const netCutLines  = new THREE.LineSegments(netCutGeo,  new THREE.LineBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.55 }));
+  const netFillLines = new THREE.LineSegments(netFillGeo, new THREE.LineBasicMaterial({ color: 0x089bdf, transparent: true, opacity: 0.55 }));
+  scene.add(netCutLines);
+  scene.add(netFillLines);
+  scene.add(netAnn.obj);
+
+  annDirData.base.div   = baseAnn.div;
+  annDirData.peak.div   = peakAnn.div;
+  annDirData.low.div    = lowAnn.div;
+  annDirData.ground.div = groundAnn.div;
+  annDirData.cut.div    = cutAnn.div;
+
+  function syncContourLabels() {
+    while (contourLabelPool.length < contourCandidates.length) {
+      const wrap = document.createElement('div');
+      wrap.className = 'ann-wrap';
+      const div = document.createElement('div');
+      div.className = 'contour-label';
+      wrap.appendChild(div);
+      const obj = new CSS2DObject(wrap);
+      scene.add(obj);
+      contourLabelPool.push({ div, obj });
+    }
+    contourLabelPool.forEach((entry, i) => {
+      if (i < contourCandidates.length) {
+        const d = contourCandidates[i];
+        const offY = d.type === 'cut' ? CUT_OFFSET : -FILL_OFFSET;
+        entry.obj.position.set(d.x, d.y + offY, d.z);
+        entry.div.textContent = `${((d.level + offY) * UNIT_SCALE).toFixed(1)} m`;
+      } else {
+        entry.div.style.opacity = '0';
+      }
+    });
+  }
+
+  function updateContourLabelVisibility() {
+    if (!showContours) { contourLabelPool.forEach(e => { e.div.style.opacity = '0'; }); return; }
+    const MIN_PX2 = 80 * 80;
+    const shown = [];
+    contourLabelPool.forEach((entry, i) => {
+      if (i >= contourCandidates.length) { entry.div.style.opacity = '0'; return; }
+      const d = contourCandidates[i];
+      const offY = d.type === 'cut' ? CUT_OFFSET : -FILL_OFFSET;
+      const v = new THREE.Vector3(d.x, d.y + offY, d.z).project(camera);
+      if (v.z > 1) { entry.div.style.opacity = '0'; return; }
+      const sx = (v.x * 0.5 + 0.5) * innerWidth;
+      const sy = (-v.y * 0.5 + 0.5) * innerHeight;
+      const labelDepth = v.z * 0.5 + 0.5;
+      if (sampleSceneDepth(sx, sy) < labelDepth - 0.01) { entry.div.style.opacity = '0'; return; }
+      let tooClose = false;
+      for (const [px, py] of shown) {
+        const dx = sx-px, dy = sy-py;
+        if (dx*dx + dy*dy < MIN_PX2) { tooClose = true; break; }
+      }
+      entry.div.style.opacity = tooClose ? '0' : '1';
+      if (!tooClose) shown.push([sx, sy]);
+    });
+  }
+
+  function updateAnnotationSides() {
+    for (const key of ['base', 'peak', 'low', 'ground']) {
+      const d = annDirData[key];
+      if (!d.div || d.flipping) continue;
+      const sx2 = d.v2.clone().project(camera).x;
+      const sx3 = d.v3.clone().project(camera).x;
+      const newDir = sx3 >= sx2 ? 1 : -1;
+      if (d.dir !== 0 && newDir !== d.dir) {
+        d.flipping = true;
+        d.div.style.opacity = '0';
+        const cls = newDir === 1 ? 'ann-label' : 'ann-label-left';
+        setTimeout(() => {
+          d.div.className = cls;
+          d.div.style.opacity = '1';
+          d.flipping = false;
+        }, 150);
+      }
+      d.dir = newDir;
+    }
+  }
+
+  function updateNetConnector() {
+    if (!cutAnnActive || !fillAnnActive) {
+      if (netAnn) netAnn.div.style.opacity = '0';
+      netLineTgt = 0;
+      return;
+    }
+    const scCut  = cutTrunkMid.clone().project(camera).x;
+    const exitRight = scCut >= 0;
+    const farX = exitRight ? 14 : -14;
+    // meeting point = end of cut's horizontal
+    const meetX = farX;
+    const meetY = cutTrunkMid.y;
+    const meetZ = cutTrunkMid.z;
+
+    // cut: horizontal only — one segment
+    const cp = netCutGeo.attributes.position;
+    cp.setXYZ(0, cutTrunkMid.x, cutTrunkMid.y, cutTrunkMid.z);
+    cp.setXYZ(1, meetX,          meetY,          meetZ);
+    cp.needsUpdate = true;
+
+    // fill: Z away from camera → horizontal X → vertical Y up to meet cut
+    const fp = netFillGeo.attributes.position;
+    fp.setXYZ(0, fillTrunkMid.x, fillTrunkMid.y, fillTrunkMid.z);
+    fp.setXYZ(1, fillTrunkMid.x,  fillTrunkMid.y, meetZ);
+    fp.setXYZ(2, fillTrunkMid.x,  fillTrunkMid.y, meetZ);
+    fp.setXYZ(3, meetX,            fillTrunkMid.y, meetZ);
+    fp.setXYZ(4, meetX,            fillTrunkMid.y, meetZ);
+    fp.setXYZ(5, meetX,            meetY,           meetZ);
+    fp.needsUpdate = true;
+
+    netAnn.obj.position.set(meetX, meetY, meetZ);
+    const net = cutTotalVol - fillTotalVol;
+    netAnn.lbl.textContent = 'Net'; netAnn.val.textContent = `${net >= 0 ? '+' : ''}${Math.round(Math.abs(net) * VOL_SCALE).toLocaleString()} m³`;
+    netAnn.div.className = 'ann-label-net';
+    netAnn.div.style.opacity = '1';
+    netLineTgt = 0.55;
+  }
+
+  function updateAnnotations(baseY) {
+    // Base — anchor: right edge midpoint of base plane
+    const b1x = 11, b1y = baseY, b1z = 0;
+    const b2x = 13, b2y = baseY + 2, b2z = 0;
+    const b3x = 13.3, b3y = baseY + 2, b3z = 0;
+    const bp = baseLeader.geo.attributes.position;
+    bp.setXYZ(0, b1x, b1y, b1z);
+    bp.setXYZ(1, b2x, b2y, b2z);
+    bp.setXYZ(2, b3x, b3y, b3z);
+    bp.needsUpdate = true;
+    baseAnn.obj.position.set(b3x, b3y, b3z);
+    baseAnn.lbl.textContent = 'Design Surface'; baseAnn.val.textContent = `${(baseY * UNIT_SCALE).toFixed(1)} m`;
+    annDirData.base.v2.set(b2x, b2y, b2z);
+    annDirData.base.v3.set(b3x, b3y, b3z);
+
+    // Peak — anchor: highest terrain vertex
+    let maxH = -Infinity, maxIdx = 0;
+    for (let i = 0; i < heights.length; i++) {
+      if (heights[i] > maxH) { maxH = heights[i]; maxIdx = i; }
+    }
+    const px = txCache[maxIdx], pz = tzCache[maxIdx];
+    const p2x = px + 2, p2y = maxH + 2, p2z = pz;
+    const p3x = px + 2.3, p3y = maxH + 2, p3z = pz;
+    const pp = peakLeader.geo.attributes.position;
+    pp.setXYZ(0, px,  maxH, pz);
+    pp.setXYZ(1, p2x, p2y,  p2z);
+    pp.setXYZ(2, p3x, p3y,  p3z);
+    pp.needsUpdate = true;
+    peakAnn.obj.position.set(p3x, p3y, p3z);
+    peakAnn.lbl.textContent = 'Peak'; peakAnn.val.textContent = `${(maxH * UNIT_SCALE).toFixed(1)} m`;
+    annDirData.peak.v2.set(p2x, p2y, p2z);
+    annDirData.peak.v3.set(p3x, p3y, p3z);
+
+    // Low — anchor: lowest terrain vertex
+    let minH = Infinity, minIdx = 0;
+    for (let i = 0; i < heights.length; i++) {
+      if (heights[i] < minH) { minH = heights[i]; minIdx = i; }
+    }
+    const lx = txCache[minIdx], lz = tzCache[minIdx];
+    const l2x = lx - 2, l2y = minH - 2, l2z = lz;
+    const l3x = lx - 2.3, l3y = minH - 2, l3z = lz;
+    const lp = lowLeader.geo.attributes.position;
+    lp.setXYZ(0, lx,  minH, lz);
+    lp.setXYZ(1, l2x, l2y,  l2z);
+    lp.setXYZ(2, l3x, l3y,  l3z);
+    lp.needsUpdate = true;
+    lowAnn.obj.position.set(l3x, l3y, l3z);
+    lowAnn.lbl.textContent = 'Low'; lowAnn.val.textContent = `${(minH * UNIT_SCALE).toFixed(1)} m`;
+    annDirData.low.v2.set(l2x, l2y, l2z);
+    annDirData.low.v3.set(l3x, l3y, l3z);
+
+    // Ground — left edge snapped to actual terrain Y at X=-11, Z=0
+    const groundEdgeY = heights[Math.round(SEG / 2) * (SEG + 1)];
+    const gp = groundLeader.geo.attributes.position;
+    gp.setXYZ(0, -11,  groundEdgeY, 0);
+    gp.setXYZ(1, -13,  groundEdgeY + 2, 0);
+    gp.setXYZ(2, -13.3, groundEdgeY + 2, 0);
+    gp.needsUpdate = true;
+    groundAnn.obj.position.set(-13.3, groundEdgeY + 2, 0);
+    groundAnn.lbl.textContent = 'Actual Surface'; groundAnn.val.textContent = '';
+    annDirData.ground.v2.set(-13, groundEdgeY + 2, 0);
+    annDirData.ground.v3.set(-13.3, groundEdgeY + 2, 0);
+  }
+
+  updateAnnotations(BASE_Y);
+  syncContourLabels();
+  rebuildCutAnnotation(BASE_Y);
+  rebuildFillAnnotation(BASE_Y);
+
+  const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+
+  // dedicated depth-only scene — same geometry, opaque depth material, no transparent routing
+  const depthScene = new THREE.Scene();
+  depthScene.add(new THREE.Mesh(terrainGeo, depthMat));
+
+  const base = new THREE.Mesh(baseGeo, new THREE.MeshLambertMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.2,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }));
+
+  const wallUniforms = {
+    uTopColor: { value: new THREE.Color(0xff0000) },
+    uBotColor: { value: new THREE.Color(0x000000) },
+    uTopAlpha: { value: 0.1 },
+    uBotAlpha: { value: 0.0 },
+    uBaseY: { value: BASE_Y },
+    uCutOffset: { value: CUT_OFFSET },
+    uFillOffset: { value: FILL_OFFSET },
+  };
+  function makeWallMat(offsetSign) {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      fog: true,
+      uniforms: THREE.UniformsUtils.merge([ THREE.UniformsLib.fog, wallUniforms ]),
+      vertexShader: `
+        #include <fog_pars_vertex>
+        attribute float grad;
+        uniform float uBaseY;
+        uniform float uCutOffset;
+        uniform float uFillOffset;
+        varying float vGrad;
+        void main() {
+          vGrad = grad;
+          vec3 pos = position;
+          pos.y = uBaseY + grad * ${offsetSign >= 0 ? 'uCutOffset' : '-uFillOffset'};
+          vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }
+      `,
+      fragmentShader: `
+        #include <fog_pars_fragment>
+        uniform vec3 uTopColor;
+        uniform vec3 uBotColor;
+        uniform float uTopAlpha;
+        uniform float uBotAlpha;
+        varying float vGrad;
+        void main() {
+          gl_FragColor = vec4(mix(uBotColor, uTopColor, vGrad), mix(uBotAlpha, uTopAlpha, vGrad));
+          #include <fog_fragment>
+        }
+      `,
+    });
+  }
+  const cutWallMat  = makeWallMat(1);
+  const fillWallMat = makeWallMat(-1);
+  const cutWalls  = new THREE.LineSegments(cutWallGeo,  cutWallMat);
+  const fillWalls = new THREE.LineSegments(fillWallGeo, fillWallMat);
+  cutWalls.frustumCulled = false;
+  fillWalls.frustumCulled = false;
+  cwu = cutWallMat.uniforms;
+  fwu = fillWallMat.uniforms;
+
+  const cutBase = new THREE.LineSegments(cutBaseGeo, new THREE.LineBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.75,
+    fog: false,
+  }));
+
+  const contourLine = new THREE.LineSegments(contourGeo, new THREE.LineBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.75,
+  }));
+
+  const ghostMinorMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, fog: false });
+  const ghostMajorMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1.0,  fog: false });
+  const ghostMinor     = new THREE.LineSegments(ghostMinorGeo,     ghostMinorMat);
+  const ghostMajor     = new THREE.LineSegments(ghostMajorGeo,     ghostMajorMat);
+  const ghostFillMinor = new THREE.LineSegments(ghostFillMinorGeo, ghostMinorMat);
+  const ghostFillMajor = new THREE.LineSegments(ghostFillMajorGeo, ghostMajorMat);
+
+  ghostGroup     = new THREE.Group();
+  ghostFillGroup = new THREE.Group();
+  cutBaseGroup   = new THREE.Group();
+  ghostGroup.add(ghostMinor);
+  ghostGroup.add(ghostMajor);
+  ghostFillGroup.add(ghostFillMinor);
+  ghostFillGroup.add(ghostFillMajor);
+  cutBaseGroup.add(cutBase);
+
+  scene.add(terrain);
+  scene.add(base);
+  scene.add(cutWalls);
+  scene.add(fillWalls);
+  scene.add(cutBaseGroup);
+  scene.add(ghostGroup);
+  scene.add(ghostFillGroup);
+  scene.add(contourLine);
+
+  function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  function rafThrottle(fn) { let p = false; return () => { if (!p) { p = true; requestAnimationFrame(() => { fn(); p = false; }); } }; }
+
+  const fillCache = new Map();
+  function syncFill(slider) {
+    let fill = fillCache.get(slider);
+    if (!fill) {
+      fill = slider.closest('.csr')?.querySelector('.csr-fill');
+      if (!fill) return;
+      fillCache.set(slider, fill);
+    }
+    const pct = (parseFloat(slider.value) - parseFloat(slider.min)) / (parseFloat(slider.max) - parseFloat(slider.min));
+    fill.style.width = `calc(${pct * 100}% - 8px)`;
+  }
+
+  const seedSlider = document.getElementById('seed-slider');
+  const seedLabel  = document.getElementById('seed-label');
+  const rafSeed = rafThrottle(() => { rebuildTerrain(SEED); lastBaseY = -Infinity; applyBase(BASE_Y); });
+  syncFill(seedSlider);
+  seedSlider.addEventListener('input', () => {
+    SEED = parseInt(seedSlider.value);
+    seedLabel.textContent = SEED;
+    syncFill(seedSlider);
+    rafSeed();
+  });
+
+  const offsetSlider = document.getElementById('offset-slider');
+  const offsetLabel  = document.getElementById('offset-label');
+  syncFill(offsetSlider);
+  offsetSlider.addEventListener('input', () => {
+    CUT_OFFSET = parseFloat(offsetSlider.value);
+    offsetLabel.textContent = `${(CUT_OFFSET * UNIT_SCALE).toFixed(1)} m`;
+    syncFill(offsetSlider);
+    cwu.uCutOffset.value = CUT_OFFSET;
+    fwu.uCutOffset.value = CUT_OFFSET;
+    applyBase(BASE_Y);
+  });
+
+  const fillOffsetSlider = document.getElementById('fill-offset-slider');
+  const fillOffsetLabel  = document.getElementById('fill-offset-label');
+  syncFill(fillOffsetSlider);
+  fillOffsetSlider.addEventListener('input', () => {
+    FILL_OFFSET = parseFloat(fillOffsetSlider.value);
+    fillOffsetLabel.textContent = `${(FILL_OFFSET * UNIT_SCALE).toFixed(1)} m`;
+    syncFill(fillOffsetSlider);
+    cwu.uFillOffset.value = FILL_OFFSET;
+    fwu.uFillOffset.value = FILL_OFFSET;
+    applyBase(BASE_Y);
+  });
+
+  const wallSlider = document.getElementById('wall-slider');
+  const wallLabel  = document.getElementById('wall-label');
+  syncFill(wallSlider);
+  const rafWall = rafThrottle(() => { lastBaseY = -Infinity; applyBase(BASE_Y); });
+  wallSlider.addEventListener('input', () => {
+    wallSpacing = parseFloat(wallSlider.value);
+    wallLabel.textContent = `${(wallSpacing * UNIT_SCALE).toFixed(1)} m`;
+    syncFill(wallSlider);
+    rafWall();
+  });
+
+  document.getElementById('minor-color').addEventListener('input', (e) => { ghostMinorMat.color.set(e.target.value); });
+  document.getElementById('major-color').addEventListener('input', (e) => { ghostMajorMat.color.set(e.target.value); });
+  document.getElementById('wall-top-color').addEventListener('input', (e) => {
+    wallUniforms.uTopColor.value.set(e.target.value);
+    cwu.uTopColor.value.set(e.target.value);
+    fwu.uTopColor.value.set(e.target.value);
+  });
+  document.getElementById('wall-bot-color').addEventListener('input', (e) => {
+    wallUniforms.uBotColor.value.set(e.target.value);
+    cwu.uBotColor.value.set(e.target.value);
+    fwu.uBotColor.value.set(e.target.value);
+  });
+
+  const minorOpacitySlider = document.getElementById('minor-opacity');
+  syncFill(minorOpacitySlider);
+  minorOpacitySlider.addEventListener('input', () => {
+    ghostMinorMat.opacity = parseFloat(minorOpacitySlider.value);
+    document.getElementById('minor-opacity-val').textContent = parseFloat(minorOpacitySlider.value).toFixed(2);
+    syncFill(minorOpacitySlider);
+  });
+
+  const majorOpacitySlider = document.getElementById('major-opacity');
+  syncFill(majorOpacitySlider);
+  majorOpacitySlider.addEventListener('input', () => {
+    ghostMajorMat.opacity = parseFloat(majorOpacitySlider.value);
+    document.getElementById('major-opacity-val').textContent = parseFloat(majorOpacitySlider.value).toFixed(2);
+    syncFill(majorOpacitySlider);
+  });
+
+  const wallTopAlphaSlider = document.getElementById('wall-top-alpha');
+  syncFill(wallTopAlphaSlider);
+  wallTopAlphaSlider.addEventListener('input', () => {
+    const v = parseFloat(wallTopAlphaSlider.value);
+    wallUniforms.uTopAlpha.value = v; cwu.uTopAlpha.value = v; fwu.uTopAlpha.value = v;
+    document.getElementById('wall-top-alpha-val').textContent = v.toFixed(2);
+    syncFill(wallTopAlphaSlider);
+  });
+
+  const wallBotAlphaSlider = document.getElementById('wall-bot-alpha');
+  syncFill(wallBotAlphaSlider);
+  wallBotAlphaSlider.addEventListener('input', () => {
+    const v = parseFloat(wallBotAlphaSlider.value);
+    wallUniforms.uBotAlpha.value = v; cwu.uBotAlpha.value = v; fwu.uBotAlpha.value = v;
+    document.getElementById('wall-bot-alpha-val').textContent = v.toFixed(2);
+    syncFill(wallBotAlphaSlider);
+  });
+
+  const minorSlider = document.getElementById('minor-slider');
+  const minorLabel  = document.getElementById('minor-label');
+  syncFill(minorSlider);
+  const rafMinor = rafThrottle(() => { lastBaseY = -Infinity; applyBase(BASE_Y); });
+  minorSlider.addEventListener('input', () => {
+    MINOR_INTERVAL = parseFloat(minorSlider.value);
+    minorLabel.textContent = `${(MINOR_INTERVAL * UNIT_SCALE).toFixed(1)} m`;
+    syncFill(minorSlider);
+    rafMinor();
+  });
+
+  document.querySelectorAll('#major-btns button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      MAJOR_N = parseInt(btn.dataset.n);
+      document.querySelectorAll('#major-btns button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      lastBaseY = -Infinity;
+      applyBase(BASE_Y);
+    });
+  });
+
+  const slider    = document.getElementById('base-slider');
+  const baseLabel = document.getElementById('base-label');
+  syncFill(slider);
+  slider.addEventListener('input', () => {
+    BASE_Y = parseFloat(slider.value);
+    baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+    syncFill(slider);
+    applyBase(BASE_Y);
+  });
+
+  document.querySelectorAll('#mode-btns button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.mode;
+      const on = btn.classList.toggle('active');
+      if (mode === 'cut')     { showCut  = on; applyBase(BASE_Y); }
+      if (mode === 'fill')    { showFill = on; applyBase(BASE_Y); }
+      if (mode === 'ann') {
+        showAnns = on; annFadeTgt = on ? 1 : 0;
+        const op = on ? '1' : '0';
+        [baseAnn, peakAnn, lowAnn, groundAnn].forEach(a => { if (a) a.div.style.opacity = op; });
+        if (cutAnnActive)  cutAnn.div.style.opacity  = op;
+        if (fillAnnActive) fillAnn.div.style.opacity = op;
+        if (netAnn)        netAnn.div.style.opacity  = on ? (netLineTgt > 0 ? '1' : '0') : '0';
+      }
+      if (mode === 'contour') {
+        showContours = on;
+        if (!on) contourLabelPool.forEach(e => { e.div.style.opacity = '0'; });
+      }
+    });
+  });
+
+  const spinBtn = document.getElementById('spin-btn');
+  spinBtn.addEventListener('click', () => {
+    controls.autoRotate = !controls.autoRotate;
+    controls.enabled = true;
+    spinBtn.classList.toggle('active', controls.autoRotate);
+  });
+
+
+  let isAnimating = false;
+  let animStart = 0;
+  const ANIM_MIN = -1.5, ANIM_MAX = 5.5;
+
+  const animBtn = document.getElementById('anim-btn');
+  animBtn.addEventListener('click', () => {
+    isAnimating = !isAnimating;
+    animBtn.textContent = isAnimating ? '⏸' : '▶';
+    animBtn.classList.toggle('active', isAnimating);
+    if (isAnimating) animStart = performance.now() - Math.asin((BASE_Y - (ANIM_MIN + ANIM_MAX) / 2) / ((ANIM_MAX - ANIM_MIN) / 2)) * (6000 / (2 * Math.PI));
+  });
+
+  const ctrlToggle = document.getElementById('ctrl-toggle');
+  const ctrlPanel  = document.getElementById('ctrl-panel');
+  ctrlToggle.addEventListener('click', () => {
+    const open = ctrlPanel.classList.toggle('hidden');
+    ctrlToggle.classList.toggle('active', !open);
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    labelRenderer.setSize(innerWidth, innerHeight);
+    dtW = Math.ceil(innerWidth  / DEPTH_SCALE);
+    dtH = Math.ceil(innerHeight / DEPTH_SCALE);
+    depthTarget.setSize(dtW, dtH);
+    depthBuffer = new Uint8Array(dtW * dtH * 4);
+  });
+
+  // ── Intro sequencer ──
+  const INTRO_START  = new THREE.Vector3(0, 90, 130);
+  const INTRO_END    = new THREE.Vector3(0, 22, 40);
+
+  const BASE_INTRO = 4.0, BASE_TARGET = 0.10;
+  const SEQ = [
+    { name: 'camera',   start:    0, dur: 3500 },
+    { name: 'cut',      start: 1000, dur: 2500 },
+    { name: 'base',     start: 3500, dur: 2000 },
+  ];
+
+  let seqStart = -1, seqFrame = 0;
+  const seqDone = new Set();
+  function resetSeq() {
+    seqStart = -1;
+    seqFrame = 0;
+    seqDone.clear();
+    CUT_OFFSET = 0;
+    FILL_OFFSET = 0;
+    BASE_Y = BASE_INTRO;
+    offsetSlider.value = 0;
+    fillOffsetSlider.value = 0;
+    slider.value = BASE_INTRO;
+    baseLabel.textContent = `${(BASE_INTRO * UNIT_SCALE).toFixed(1)} m`;
+    offsetLabel.textContent = '0.0 m';
+    fillOffsetLabel.textContent = '0.0 m';
+    syncFill(offsetSlider); syncFill(fillOffsetSlider); syncFill(slider);
+    camera.fov = 30; camera.updateProjectionMatrix();
+    camera.position.copy(INTRO_START);
+    controls.enabled = false;
+    applyBase(BASE_Y);
+    const ov = document.getElementById('intro-overlay');
+    if (ov) { ov.classList.remove('fade'); ov.style.opacity = '1'; }
+    setTimeout(() => ov?.classList.add('fade'), 100);
+  }
+
+  BASE_Y = BASE_INTRO;
+  slider.value = BASE_INTRO;
+  baseLabel.textContent = `${(BASE_INTRO * UNIT_SCALE).toFixed(1)} m`;
+  syncFill(slider);
+  applyBase(BASE_Y);
+  camera.fov = 30; camera.updateProjectionMatrix();
+  camera.position.copy(INTRO_START);
+  controls.enabled = false;
+  setTimeout(() => document.getElementById('intro-overlay')?.classList.add('fade'), 100);
+
+  window.addEventListener('pageshow', e => { if (e.persisted) resetSeq(); });
+
+  (function animate(ts = 0) {
+    requestAnimationFrame(animate);
+    const dt = Math.min((ts - prevTs) * 0.001, 0.1); prevTs = ts;
+
+    if (seqDone.size < SEQ.length) {
+      if (seqStart < 0) seqStart = ts;
+      const elapsed = ts - seqStart;
+      seqFrame++;
+      let dirty = false, heavyDirty = false;
+
+      for (const s of SEQ) {
+        if (seqDone.has(s.name)) continue;
+        if (elapsed < s.start) continue;
+        const t = s.dur > 0 ? Math.min((elapsed - s.start) / s.dur, 1) : 1;
+        const e = 1 - Math.pow(1 - t, 3);
+
+        if (s.name === 'camera') {
+          const pos = new THREE.Vector3().lerpVectors(INTRO_START, INTRO_END, e);
+          const angle = e * Math.PI * 2;
+          const rel = pos.clone().sub(controls.target);
+          const cs = Math.cos(angle), sn = Math.sin(angle);
+          camera.position.set(
+            controls.target.x + rel.x * cs - rel.z * sn,
+            pos.y,
+            controls.target.z + rel.x * sn + rel.z * cs
+          );
+          camera.lookAt(controls.target);
+        }
+        if (s.name === 'cut') { CUT_OFFSET = TARGET_CUT_OFFSET * eio(t); cwu.uCutOffset.value = CUT_OFFSET; fwu.uCutOffset.value = CUT_OFFSET; controls.target.y = 3 + CUT_OFFSET; camera.fov = 30 + 34 * eio(t); camera.updateProjectionMatrix(); dirty = true; }
+        if (s.name === 'base') { BASE_Y = BASE_INTRO + (BASE_TARGET - BASE_INTRO) * eio(t); heavyDirty = true; }
+
+        if (t >= 1) {
+          seqDone.add(s.name);
+          if (s.name === 'camera') {
+            controls.enabled = true;
+            document.getElementById('intro-overlay')?.remove();
+          }
+        }
+      }
+
+      if (dirty) {
+        offsetSlider.value = CUT_OFFSET;
+        offsetLabel.textContent = `${(CUT_OFFSET * UNIT_SCALE).toFixed(1)} m`;
+        syncFill(offsetSlider);
+        applyBase(BASE_Y);
+      }
+      if (heavyDirty) {
+        slider.value = BASE_Y;
+        baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+        syncFill(slider);
+        applyBase(BASE_Y);
+      }
+    }
+
+    if (isAnimating) {
+      const mid = (ANIM_MIN + ANIM_MAX) / 2;
+      const amp = (ANIM_MAX - ANIM_MIN) / 2;
+      BASE_Y = mid + Math.sin((ts - animStart) / 6000 * Math.PI * 2) * amp;
+      BASE_Y = Math.round(BASE_Y / 0.05) * 0.05;
+      slider.value = BASE_Y;
+      baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+      syncFill(slider);
+      applyBase(BASE_Y);
+    }
+    controls.update();
+    if (contourCandidates.length) syncContourLabels();
+    if (contourLabelPool.length) updateContourLabelVisibility();
+    dashTime.value += 0.004;
+    const glowPulse = 0.92 + 0.08 * Math.sin(ts * 0.0006);
+    if (cutHalo.visible)  cutHalo.scale.set(0.8 * glowPulse, 0.8 * glowPulse, 1);
+    if (fillHalo.visible) fillHalo.scale.set(0.8 * glowPulse, 0.8 * glowPulse, 1);
+    if (annDirData.base.div) updateAnnotationSides();
+    updateNetConnector();
+    netLineAlpha += (netLineTgt - netLineAlpha) * Math.min(1, dt * 5);
+    annFade += (annFadeTgt - annFade) * Math.min(1, dt * 4);
+    const af = annFade;
+    annMat.opacity = 0.55 * af;
+    cutTrunkMat.uniforms.uOpacity.value  = 0.7 * af;
+    cutBranchMat.uniforms.uOpacity.value = 0.4 * af;
+    fillTrunkMat.uniforms.uOpacity.value  = 0.7 * af;
+    fillBranchMat.uniforms.uOpacity.value = 0.4 * af;
+    cutHaloMat.opacity  = 0.9 * af;
+    fillHaloMat.opacity = 0.9 * af;
+    cutNodeMesh.material.opacity  = af;
+    fillNodeMesh.material.opacity = af;
+    netCutLines.material.opacity  = netLineAlpha * af;
+    netFillLines.material.opacity = netLineAlpha * af;
+    [baseAnn, peakAnn, lowAnn, groundAnn, cutAnn, fillAnn, netAnn].forEach(a => {
+      if (a) a.obj.element.style.opacity = af;
+    });
+    if (netLineAlpha < 0.01 && netLineTgt === 0) {
+      const _cp = netCutGeo.attributes.position; _cp.setXYZ(0,0,0,0); _cp.setXYZ(1,0,0,0); _cp.needsUpdate = true;
+      const _fp = netFillGeo.attributes.position; for (let i = 0; i < 6; i++) _fp.setXYZ(i,0,0,0); _fp.needsUpdate = true;
+    }
+    renderer.setRenderTarget(depthTarget);
+    renderer.render(depthScene, camera);
+    renderer.setRenderTarget(null);
+    renderer.readRenderTargetPixels(depthTarget, 0, 0, dtW, dtH, depthBuffer);
+    depthReady = true;
+
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+    stats.update();
+  })();
+</script>
+</body>
+</html>
