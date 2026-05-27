@@ -2,3 +2,8 @@ shader-explainer.html
 .DS_Store
 *.mp4
 .wrangler/
+
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
