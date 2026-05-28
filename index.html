@@ -39,6 +39,8 @@
       transition:all 0.15s;
     }
     .util-btn.active { color:#fff; background:rgba(8,60,100,0.6); border-color:#089BDF; }
+    @keyframes cam-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .util-btn.loading svg { animation: cam-pulse 0.8s ease-in-out infinite; }
 
     /* panel */
     .panel-zone {
@@ -129,7 +131,9 @@
     .latlon-input { border:none; background:transparent; outline:none; font-size:11px; font-family:'Share Tech Mono', monospace; color:rgba(255,255,255,0.6); text-align:right; width:100%; cursor:text; }
     .latlon-input:focus { color:rgba(255,255,255,0.9); }
     .site-sel option { background:#0b0d10; color:#cfd2d6; }
-    .site-sel.loading { opacity:0.5; pointer-events:none; }
+    .site-sel.loading, .site-sel:disabled { opacity:0.4; pointer-events:none; }
+    .latlon-input:disabled { opacity:0.35; pointer-events:none; }
+    .csr.webcam-disabled { opacity:0.35; pointer-events:none; }
 
     /* pan compass */
     .pan-grid { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:2px 0; }
@@ -320,7 +324,6 @@
 <div class="util-strip">
   <button id="anim-btn" class="util-btn" title="animate base Y">▶</button>
   <button id="spin-btn" class="util-btn" title="auto rotate">⟳</button>
-  <button id="loc-btn" class="util-btn" title="use device location">◎</button>
   <button class="ctrl-btn active" id="ctrl-toggle">Controls</button>
 </div>
 
@@ -343,6 +346,12 @@
           <option value="hvannadalshnjukur">Hvannadalshnjúkur</option>
           <option value="custom">Custom…</option>
         </select>
+        <button id="loc-btn" class="util-btn" title="use camera for live depth">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
       </div>
       <div class="csr" id="site-custom-row">
         <span class="csr-label">Lat, Lon</span>
@@ -574,6 +583,21 @@
     'hvannadalshnjukur': { lat: 64.0163, lon: -16.6806, z: 13, name: 'Hvannadalshnjúkur' },
   };
   let CURRENT_SITE = 'bingham';
+
+  // ── Webcam / Live Depth pipeline ──
+  let webcamActive = false;
+  let webcamStream = null;
+  let webcamVideo = null;
+  let webcamCanvas = null;
+  let webcamCtx = null;
+  let webcamLastTile = null;
+  let webcamTex = null;
+  let webcamBaseSnapped = false;
+  let webcamPrevShowSat = null;
+  const DEPTH_HEIGHT_SCALE = 2.0;
+  const DEPTH_INVERT = false;
+  const CAM_FLIP_X = false; // flip depth + texture horizontally
+  const CAM_FLIP_Y = false; // flip depth + texture vertically
 
   function latLonToTile(lat, lon, z) {
     const n = 2 ** z;
@@ -1809,6 +1833,7 @@
   }
 
   async function loadTile(x, y, z) {
+    if (webcamActive) return;
     const n = 2 ** z;
     x = ((x % n) + n) % n;
     if (y < 0 || y >= n) return;
@@ -1903,6 +1928,183 @@
   panDown .addEventListener('click', () => pan( 0,  1));
   panLeft .addEventListener('click', () => pan(-1,  0));
   panRight.addEventListener('click', () => pan( 1,  0));
+
+  // ── Webcam pipeline ──
+
+  async function startWebcam() {
+    const btn = document.getElementById('loc-btn');
+    if (webcamActive) return;
+    if (seqDone.size < SEQ.length) return;
+
+    btn.classList.add('loading');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      webcamStream = stream;
+    } catch (err) {
+      console.error('[webcam] permission denied:', err);
+      btn.classList.remove('loading');
+      btn.style.borderColor = 'rgba(255,60,60,0.7)';
+      btn.style.background = 'rgba(255,0,0,0.08)';
+      setTimeout(() => {
+        btn.style.borderColor = '';
+        btn.style.background = '';
+      }, 2000);
+      return;
+    }
+
+    webcamVideo = document.createElement('video');
+    webcamVideo.autoplay = true;
+    webcamVideo.playsInline = true;
+    webcamVideo.muted = true;
+    webcamVideo.srcObject = webcamStream;
+    await webcamVideo.play();
+
+    webcamCanvas = new OffscreenCanvas(webcamVideo.videoWidth, webcamVideo.videoHeight);
+    webcamCtx = webcamCanvas.getContext('2d', { willReadFrequently: true });
+    // Draw first frame so CanvasTexture has content
+    webcamCtx.drawImage(webcamVideo, 0, 0, webcamVideo.videoWidth, webcamVideo.videoHeight);
+
+    webcamLastTile = { x: currentTile.x, y: currentTile.y, z: currentTile.z };
+
+    // CanvasTexture from same canvas depth reads from — zero orientation ambiguity
+    webcamTex = new THREE.CanvasTexture(webcamCanvas);
+    webcamTex.colorSpace = THREE.SRGBColorSpace;
+    if (terrainShader) {
+      terrainShader.uniforms.uSatMap.value = webcamTex;
+      terrainShader.uniforms.uHasSat.value = 1;
+    }
+    satRevealTarget = 1.0;
+
+    // disable tile controls
+    siteSelect.disabled = true;
+    siteLatLon.disabled = true;
+    zoomSlider.disabled = true;
+    zoomSlider.closest('.csr').classList.add('webcam-disabled');
+    [panUp, panDown, panLeft, panRight].forEach(el => el.classList.add('disabled'));
+
+    // relabel sat toggle → Texture, force active
+    const satBtn = document.querySelector('.tog[data-mode="sat"]');
+    webcamPrevShowSat = showSat;
+    if (satBtn) {
+      satBtn.textContent = 'Texture';
+      satBtn.classList.add('active');
+    }
+    showSat = true;
+
+    webcamBaseSnapped = false;
+    webcamActive = true;
+    btn.classList.remove('loading');
+    btn.classList.add('active');
+  }
+
+  function stopWebcam() {
+    const btn = document.getElementById('loc-btn');
+
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(t => t.stop());
+      webcamStream = null;
+    }
+
+    if (terrainShader && terrainShader.uniforms.uSatMap.value) {
+      terrainShader.uniforms.uSatMap.value.dispose();
+    }
+
+    webcamActive = false;
+
+    satRevealTarget = showSat ? 1.0 : 0.0;
+    if (terrainShader) {
+      terrainShader.uniforms.uHasSat.value = showSat && satLoaded ? 1 : 0;
+    }
+
+    if (webcamLastTile) {
+      loadSatellite(webcamLastTile.x, webcamLastTile.y, webcamLastTile.z).then(tex => {
+        if (webcamActive) return;
+        if (terrainShader) {
+          terrainShader.uniforms.uSatMap.value = tex;
+          terrainShader.uniforms.uHasSat.value = showSat ? 1 : 0;
+        }
+      }).catch(err => console.error('[sat]', err));
+    }
+
+    webcamVideo = null;
+    webcamCanvas = null;
+    webcamCtx = null;
+    webcamTex = null;
+
+    // re-enable tile controls
+    siteSelect.disabled = false;
+    siteLatLon.disabled = false;
+    zoomSlider.disabled = false;
+    zoomSlider.closest('.csr').classList.remove('webcam-disabled');
+    [panUp, panDown, panLeft, panRight].forEach(el => el.classList.remove('disabled'));
+    updatePanState();
+
+    // restore sat toggle label and state
+    const satBtn = document.querySelector('.tog[data-mode="sat"]');
+    if (satBtn) {
+      satBtn.textContent = 'Satellite';
+      if (webcamPrevShowSat !== null) {
+        showSat = webcamPrevShowSat;
+        satBtn.classList.toggle('active', showSat);
+        webcamPrevShowSat = null;
+      }
+    }
+
+    btn.classList.remove('active');
+  }
+
+  function processWebcamFrame() {
+    if (!webcamActive || !webcamVideo || !webcamCtx) return;
+    const vw = webcamVideo.videoWidth;
+    const vh = webcamVideo.videoHeight;
+    if (vw === 0 || vh === 0) return;
+
+    webcamCanvas.width = vw;
+    webcamCanvas.height = vh;
+    webcamCtx.drawImage(webcamVideo, 0, 0, vw, vh);
+    if (webcamTex) webcamTex.needsUpdate = true;
+
+    const size = Math.min(vw, vh);
+    const ox = (vw - size) >> 1;
+    const oy = (vh - size) >> 1;
+    const imgData = webcamCtx.getImageData(ox, oy, size, size);
+    const pixels = imgData.data;
+
+    const w = SEG + 1;
+    for (let i = 0; i < tPos.count; i++) {
+      const col = i % w;
+      const row = Math.floor(i / w);
+      const sc = CAM_FLIP_X ? SEG - col : col;
+      const sr = CAM_FLIP_Y ? SEG - row : row;
+      const px = Math.floor(sc / SEG * (size - 1));
+      const py = Math.floor(sr / SEG * (size - 1));
+      const pi = (py * size + px) * 4;
+      const r = pixels[pi], g = pixels[pi + 1], b = pixels[pi + 2];
+      const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      const h = (DEPTH_INVERT ? 1 - lum : lum) * DEPTH_HEIGHT_SCALE;
+      heights[i] = h;
+      tPos.setY(i, h);
+    }
+    tPos.needsUpdate = true;
+    terrainGeo.computeVertexNormals();
+
+    tuneTerrainRange();
+    if (!webcamBaseSnapped) {
+      baseTweenTarget = BASE_TARGET;
+      baseTweening = true;
+      webcamBaseSnapped = true;
+    }
+    lastBaseY = -Infinity;
+    applyBase(BASE_Y);
+  }
+
+  document.getElementById('loc-btn').addEventListener('click', () => {
+    if (webcamActive) stopWebcam();
+    else startWebcam();
+  });
 
   // Initial-site sync: dropdown + zoom reflect default site, base slider range fits terrain
   siteSelect.value = CURRENT_SITE;
@@ -2164,6 +2366,7 @@
   (function animate(ts = 0) {
     requestAnimationFrame(animate);
     const dt = Math.min((ts - prevTs) * 0.001, 0.1); prevTs = ts;
+    processWebcamFrame();
 
     if (seqDone.size < SEQ.length) {
       if (seqStart < 0) seqStart = ts;
