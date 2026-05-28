@@ -128,24 +128,28 @@
     .site-sel option { background:#0b0d10; color:#cfd2d6; }
     .site-sel.loading { opacity:0.5; pointer-events:none; }
 
-    /* pan cross */
-    .pan-grid { display:grid; grid-template-columns:24px 24px 24px 1fr; grid-template-rows:24px 24px 24px; gap:3px; align-items:center; margin:2px 0; }
-    .pan { font-size:14px; line-height:1; padding:0; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.6); border-radius:2px; cursor:pointer; font-family:'Share Tech Mono', monospace; transition:all 0.15s; width:24px; height:24px; display:flex; align-items:center; justify-content:center; }
-    .pan:hover:not([disabled]) { border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.9); }
-    .pan[disabled] { opacity:0.2; cursor:not-allowed; }
-    .pan-up    { grid-column:2; grid-row:1; }
-    .pan-left  { grid-column:1; grid-row:2; }
-    .pan-right { grid-column:3; grid-row:2; }
-    .pan-down  { grid-column:2; grid-row:3; }
-    .pan-readout { grid-column:4; grid-row:1 / 4; font-size:10px; font-family:'Share Tech Mono', monospace; color:rgba(255,255,255,0.4); padding-left:10px; line-height:1.5; white-space:pre; }
+    /* pan compass */
+    .pan-grid { display:flex; align-items:center; gap:10px; margin:2px 0; }
+    .compass-rose { width:92px; height:55px; flex-shrink:0; }
+    .compass-rose .pan { cursor:pointer; }
+    .compass-rose .pan .fin { fill:#17171A; stroke:#313134; stroke-width:2; }
+    .compass-rose .pan:hover .fin { stroke:#676767; }
+    .compass-rose .pan:active .fin { fill:#191929; stroke:#2EBDFF; }
+    .compass-rose .pan .ltr { fill:white; opacity:0.4; pointer-events:none; }
+    .compass-rose .pan:active .ltr { opacity:1; }
+    .compass-rose .pan.disabled { opacity:0.2; pointer-events:none; }
+    .pan-readout { font-size:10px; font-family:'Share Tech Mono', monospace; color:rgba(255,255,255,0.4); line-height:1.5; white-space:pre; }
 
     /* toggles */
     .toggles { display:flex; gap:5px; flex-wrap:wrap; }
+    .tog-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; }
+    .tog-grid .tog { text-align:center; padding:4px 6px; }
     .tog { font-size:11px; padding:4px 11px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.35); border-radius:2px; cursor:pointer; white-space:nowrap; font-family:'Share Tech', sans-serif; font-weight:700; letter-spacing:0.04em; transition:all 0.15s; }
     .tog[data-mode="cut"].active    { background:rgba(245,20,20,0.1);   border-color:rgba(255,80,80,0.5);   color:rgba(255,150,150,0.9); }
     .tog[data-mode="fill"].active   { background:rgba(8,155,223,0.1);   border-color:rgba(8,155,223,0.5);   color:rgba(90,200,255,0.9); }
     .tog[data-mode="ann"].active,
     .tog[data-mode="contour"].active { background:rgba(255,255,255,0.12); border-color:rgba(255,255,255,0.35); color:rgba(255,255,255,0.85); }
+    .tog[data-mode="sat"].active     { background:rgba(60,180,100,0.1);   border-color:rgba(60,200,100,0.5);  color:rgba(120,230,150,0.9); }
 
     /* ctrl button */
     .ctrl-btn {
@@ -286,11 +290,12 @@
 <div class="panel-zone" id="ctrl-panel">
   <div class="fp">
     <div class="grp">
-      <div class="toggles" id="mode-btns">
-        <button data-mode="cut"     class="tog active">Cut</button>
-        <button data-mode="fill"    class="tog active">Fill</button>
-        <button data-mode="ann"     class="tog active">Annotations</button>
-        <button data-mode="contour" class="tog active">Contour Labels</button>
+      <div class="tog-grid" id="mode-btns">
+        <button data-mode="cut"     class="tog active" style="grid-column:span 2">Cut</button>
+        <button data-mode="fill"    class="tog active" style="grid-column:span 2">Fill</button>
+        <button data-mode="sat"     class="tog active" style="grid-column:span 2">Satellite</button>
+        <button data-mode="ann"     class="tog active" style="grid-column:span 3">Annotations</button>
+        <button data-mode="contour" class="tog active" style="grid-column:span 3">Contour Labels</button>
       </div>
     </div>
 
@@ -323,15 +328,29 @@
         <input type="range" id="zoom-slider" min="8" max="14" step="1" value="13">
       </div>
       <div class="pan-grid">
-        <button class="pan pan-up"    data-dir="up"    title="north">↑</button>
-        <button class="pan pan-left"  data-dir="left"  title="west">←</button>
-        <button class="pan pan-right" data-dir="right" title="east">→</button>
-        <button class="pan pan-down"  data-dir="down"  title="south">↓</button>
+        <svg class="compass-rose" viewBox="0 0 92 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <g class="pan pan-up">
+            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M45.9141 1.41406L47.4141 2.91406L60.9141 16.4141L62.4141 17.9141V25.4141H47.4141H44.4141H29.4141V17.9141L30.9141 16.4141L44.4141 2.91406L45.9141 1.41406Z"/>
+            <path class="ltr" d="M47.7939 10.4141V15.6504H46.8376L44.5595 12.3547H44.5212V15.6504H43.4141V10.4141H44.3857L46.6459 13.7072H46.6919V10.4141H47.7939Z"/>
+          </g>
+          <g class="pan pan-down">
+            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M45.9141 53.4141L47.4141 51.9141L60.9141 38.4141L62.4141 36.9141V29.4141H47.4141H44.4141H29.4141V36.9141L30.9141 38.4141L44.4141 51.9141L45.9141 53.4141Z"/>
+            <path class="ltr" d="M46.4234 39.9916C46.403 39.7854 46.3152 39.6251 46.1601 39.5109C46.005 39.3967 45.7945 39.3396 45.5286 39.3396C45.3479 39.3396 45.1953 39.3652 45.0709 39.4163C44.9464 39.4658 44.851 39.5348 44.7845 39.6234C44.7197 39.7121 44.6874 39.8126 44.6874 39.9251C44.6839 40.0189 44.7036 40.1007 44.7462 40.1706C44.7905 40.2405 44.851 40.301 44.9277 40.3521C45.0044 40.4016 45.093 40.445 45.1936 40.4825C45.2942 40.5183 45.4016 40.549 45.5158 40.5746L45.9862 40.6871C46.2146 40.7382 46.4243 40.8064 46.6152 40.8916C46.8061 40.9768 46.9714 41.0817 47.1112 41.2061C47.251 41.3305 47.3592 41.4771 47.4359 41.6459C47.5143 41.8146 47.5544 42.0081 47.5561 42.2263C47.5544 42.5467 47.4726 42.8246 47.3107 43.0598C47.1504 43.2933 46.9186 43.4749 46.6152 43.6044C46.3135 43.7322 45.9496 43.7962 45.5234 43.7962C45.1007 43.7962 44.7325 43.7314 44.4189 43.6018C44.107 43.4723 43.8632 43.2805 43.6876 43.0266C43.5138 42.7709 43.4226 42.4547 43.4141 42.078H44.4854C44.4973 42.2536 44.5476 42.4001 44.6362 42.5178C44.7266 42.6337 44.8467 42.7214 44.9967 42.7811C45.1484 42.8391 45.3197 42.868 45.5107 42.868C45.6982 42.868 45.8609 42.8408 45.999 42.7862C46.1388 42.7317 46.247 42.6558 46.3237 42.5587C46.4004 42.4615 46.4388 42.3499 46.4388 42.2237C46.4388 42.1061 46.4038 42.0072 46.3339 41.9271C46.2658 41.847 46.1652 41.7788 46.0322 41.7226C45.901 41.6663 45.7399 41.6152 45.549 41.5692L44.9788 41.426C44.5374 41.3186 44.1888 41.1507 43.9331 40.9223C43.6774 40.6939 43.5504 40.3862 43.5521 39.9993C43.5504 39.6822 43.6348 39.4053 43.8053 39.1683C43.9774 38.9314 44.2135 38.7464 44.5135 38.6135C44.8135 38.4805 45.1544 38.4141 45.5362 38.4141C45.9249 38.4141 46.2641 38.4805 46.5538 38.6135C46.8453 38.7464 47.072 38.9314 47.2339 39.1683C47.3959 39.4053 47.4794 39.6797 47.4845 39.9916H46.4234Z"/>
+          </g>
+          <g class="pan pan-right">
+            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M90.4141 28.9141L88.9141 30.4141L75.4141 43.9141L73.9141 45.4141L66.4141 45.4141L66.4141 30.4141L66.4141 27.4141L66.4141 12.4141L73.9141 12.4141L75.4141 13.9141L88.9141 27.4141L90.4141 28.9141Z"/>
+            <path class="ltr" d="M75.4141 31.6504V26.4141H78.9425V27.3268H76.5212V28.5746H78.7609V29.4874H76.5212V30.7376H78.9527V31.6504H75.4141Z"/>
+          </g>
+          <g class="pan pan-left">
+            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M1.41406 29.9141L2.91406 31.4141L16.4141 44.9141L17.9141 46.4141L25.4141 46.4141L25.4141 31.4141L25.4141 28.4141L25.4141 13.4141L17.9141 13.4141L16.4141 14.9141L2.91406 28.4141L1.41406 29.9141Z"/>
+            <path class="ltr" d="M10.9124 32.6504L9.41406 27.4141H10.6234L11.4902 31.0524H11.5337L12.4899 27.4141H13.5254L14.4791 31.0601H14.5251L15.3919 27.4141H16.6013L15.103 32.6504H14.024L13.0268 29.2268H12.9859L11.9913 32.6504H10.9124Z"/>
+          </g>
+        </svg>
         <div class="pan-readout" id="pan-readout">—</div>
       </div>
       <div class="csr">
         <div class="csr-fill"></div>
-        <span class="csr-label">Design Level</span>
+        <span class="csr-label">Base Level</span>
         <span class="csr-val" id="base-label">0.10 m</span>
         <input type="range" id="base-slider" min="-2" max="6" step="0.05" value="0.1">
       </div>
@@ -555,6 +574,17 @@
     return { elev, min, max, tileMeters, lat };
   }
 
+  async function loadSatellite(x, y, z) {
+    const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('satellite fetch failed');
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    return new Promise((resolve, reject) => {
+      new THREE.TextureLoader().load(blobUrl, tex => { URL.revokeObjectURL(blobUrl); resolve(tex); }, undefined, err => { URL.revokeObjectURL(blobUrl); reject(err); });
+    });
+  }
+
   const initSite = SITES[CURRENT_SITE];
   const initXY = latLonToTile(initSite.lat, initSite.lon, initSite.z);
   let currentTile = { x: initXY.x, y: initXY.y, z: initSite.z };
@@ -562,6 +592,16 @@
   let METERS_PER_UNIT = elevData.tileMeters / SIZE;
   let UNIT_SCALE = METERS_PER_UNIT;
   let VOL_SCALE  = UNIT_SCALE ** 3;
+
+  loadSatellite(currentTile.x, currentTile.y, currentTile.z).then(tex => {
+    satLoaded = true;
+    if (terrainShader) {
+      terrainShader.uniforms.uSatMap.value = tex;
+      terrainShader.uniforms.uHasSat.value = showSat ? 1 : 0;
+    } else {
+      pendingSatTex = tex;
+    }
+  }).catch(err => console.error('[sat] error:', err));
 
 
   function sampleElev(u, v) {
@@ -588,6 +628,11 @@
 
   // terrain material — PBR with fragment-shader cut/fill boundary
   let terrainShader = null;
+  let pendingSatTex = null;
+  let showSat = true;
+  let satLoaded = false;
+  let satRevealCurrent = 1.0;
+  let satRevealTarget  = 1.0;
   const terrainMat = new THREE.MeshPhysicalMaterial({
     side: THREE.DoubleSide,
     roughness: 0.8,
@@ -600,31 +645,57 @@
   terrainMat.onBeforeCompile = (shader) => {
     shader.uniforms.uBaseY    = { value: BASE_Y };
     shader.uniforms.uViewMode = { value: 0 };
+    shader.uniforms.uSatMap   = { value: null };
+    shader.uniforms.uHasSat    = { value: 0 };
+    shader.uniforms.uPeak      = { value: ANIM_MAX };
+    shader.uniforms.uLow       = { value: ANIM_MIN };
+    shader.uniforms.uSatReveal = { value: satRevealCurrent };
     terrainShader = shader;
 
-    // pass terrain Y as varying
-    shader.vertexShader = 'varying float vTerrainY;\n' + shader.vertexShader;
+    // apply satellite texture if it arrived before first compile
+    if (pendingSatTex) {
+      shader.uniforms.uSatMap.value = pendingSatTex;
+      shader.uniforms.uHasSat.value = 1;
+      pendingSatTex = null;
+    }
+
+    // derive UV from position — avoids dependency on USE_UV / uv attribute availability
+    shader.vertexShader = 'varying float vTerrainY;\nvarying vec2 vTerrainUV;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
-      '#include <begin_vertex>\nvTerrainY = position.y;'
+      '#include <begin_vertex>\nvTerrainY = position.y;\nvTerrainUV = vec2(position.x / 22.0 + 0.5, position.z / 22.0 + 0.5);'
     );
 
-    // per-fragment cut/fill color decision
-    shader.fragmentShader = 'varying float vTerrainY;\nuniform float uBaseY;\nuniform int uViewMode;\n' + shader.fragmentShader;
+    shader.fragmentShader = 'varying float vTerrainY;\nvarying vec2 vTerrainUV;\nuniform float uBaseY;\nuniform int uViewMode;\nuniform sampler2D uSatMap;\nuniform int uHasSat;\nuniform float uPeak;\nuniform float uLow;\nuniform float uSatReveal;\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
       `
-      vec3 cutCol   = vec3(0.96, 0.08, 0.08);
-      vec3 fillCol  = vec3(0.0, 0.278, 0.671);
-      vec3 mutedCol = vec3(0.06, 0.06, 0.09);
+      vec3 cutCol  = vec3(0.96, 0.08, 0.08);
+      vec3 fillCol = vec3(0.03, 0.35, 0.78);
+      float normY   = clamp((vTerrainY - uLow) / max(uPeak - uLow, 0.001), 0.0, 1.0);
+      float satMask = uHasSat == 1 ? smoothstep(uSatReveal + 0.08, uSatReveal - 0.08, normY) : 0.0;
+      vec3 satTex   = uHasSat == 1 ? texture2D(uSatMap, vTerrainUV).rgb : vec3(0.06, 0.06, 0.09);
+      vec3 satCol   = mix(vec3(0.06, 0.06, 0.09), satTex, satMask);
       bool isCut = vTerrainY > uBaseY;
+
+      float cutRange  = max(uPeak - uBaseY, 0.001);
+      float fillRange = max(uBaseY - uLow,  0.001);
+      float cutT  = clamp((vTerrainY - uBaseY) / cutRange,  0.0, 1.0);
+      float fillT = clamp((uBaseY - vTerrainY) / fillRange, 0.0, 1.0);
+      float blend = pow(isCut ? cutT : fillT, 0.6);
+
       vec3 zoneCol;
-      if (uViewMode == 1)      zoneCol = isCut ? cutCol   : mutedCol;
-      else if (uViewMode == 2) zoneCol = isCut ? mutedCol : fillCol;
-      else if (uViewMode == 3) zoneCol = mutedCol;
-      else                     zoneCol = isCut ? cutCol   : fillCol;
+      if (uViewMode == 3) {
+        zoneCol = satCol;
+      } else if (uViewMode == 0) {
+        zoneCol = isCut ? mix(satCol, cutCol, blend) : mix(satCol, fillCol, blend);
+      } else if (uViewMode == 1) {
+        zoneCol = isCut ? mix(satCol, cutCol, blend) : satCol;
+      } else {
+        zoneCol = isCut ? satCol : mix(satCol, fillCol, blend);
+      }
       diffuseColor.rgb = zoneCol;
-      diffuseColor.a = isCut ? 1.0 : 0.55;
+      diffuseColor.a = 1.0;
       `
     );
   };
@@ -1427,7 +1498,7 @@
     bp.setXYZ(2, b3x, b3y, b3z);
     bp.needsUpdate = true;
     baseAnn.obj.position.set(b3x, b3y, b3z);
-    baseAnn.lbl.textContent = 'Design Surface'; baseAnn.val.textContent = `${(baseY * UNIT_SCALE).toFixed(1)} m`;
+    baseAnn.lbl.textContent = 'Base Surface'; baseAnn.val.textContent = `${(baseY * UNIT_SCALE).toFixed(1)} m`;
     annDirData.base.v2.set(b2x, b2y, b2z);
     annDirData.base.v3.set(b3x, b3y, b3z);
 
@@ -1561,7 +1632,7 @@
   }));
 
   const contourLine = new THREE.LineSegments(contourGeo, new THREE.LineBasicMaterial({
-    color: 0xffffff,
+    color: 0x089BDF,
     transparent: true,
     opacity: 0.75,
   }));
@@ -1629,6 +1700,10 @@
     ANIM_MAX    = pmax + 0.5;
     BASE_INTRO  = pmax;
     BASE_TARGET = (pmin + pmax) / 2;
+    if (terrainShader) {
+      terrainShader.uniforms.uPeak.value = pmax;
+      terrainShader.uniforms.uLow.value  = pmin;
+    }
   }
 
   const panUp     = document.querySelector('.pan-up');
@@ -1640,8 +1715,8 @@
   function updatePanState() {
     const { x, y, z } = currentTile;
     const n = 2 ** z;
-    panUp.disabled   = y <= 0;
-    panDown.disabled = y >= n - 1;
+    panUp.classList.toggle('disabled',   y <= 0);
+    panDown.classList.toggle('disabled', y >= n - 1);
     const { lat, lon } = tileCenterLatLon(x, y, z);
     panReadout.textContent = `x ${x}\ny ${y}\nz ${z}\n${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
   }
@@ -1666,6 +1741,16 @@
       lastBaseY = -Infinity;
       applyBase(BASE_Y);
       updatePanState();
+      loadSatellite(x, y, z).then(tex => {
+        satLoaded = true;
+        if (terrainShader) {
+          if (terrainShader.uniforms.uSatMap.value) terrainShader.uniforms.uSatMap.value.dispose();
+          terrainShader.uniforms.uSatMap.value = tex;
+          terrainShader.uniforms.uHasSat.value = showSat ? 1 : 0;
+        } else {
+          pendingSatTex = tex;
+        }
+      }).catch(err => console.error('[sat]', err));
     } catch (err) {
       console.error(err);
       alert('Failed to load tile: ' + err.message);
@@ -1856,6 +1941,10 @@
       const on = btn.classList.toggle('active');
       if (mode === 'cut')     { showCut  = on; applyBase(BASE_Y); }
       if (mode === 'fill')    { showFill = on; applyBase(BASE_Y); }
+      if (mode === 'sat') {
+        showSat = on;
+        satRevealTarget = on ? 1.0 : 0.0;
+      }
       if (mode === 'ann') {
         showAnns = on; annFadeTgt = on ? 1 : 0;
         const op = on ? '1' : '0';
@@ -1918,7 +2007,7 @@
     { name: 'base',     start: 3500, dur: 2000 },
   ];
 
-  let seqStart = -1, seqFrame = 0;
+  let seqStart = -1, seqFrame = 0, seqFinished = false;
   const seqDone = new Set();
   function resetSeq() {
     seqStart = -1;
@@ -1995,6 +2084,15 @@
         }
       }
 
+      if (!seqFinished && seqDone.size >= SEQ.length) {
+        seqFinished = true;
+        setTimeout(() => {
+          showSat = false;
+          satRevealTarget = 0.0;
+          document.querySelector('.tog[data-mode="sat"]')?.classList.remove('active');
+        }, 600);
+      }
+
       if (dirty) {
         offsetSlider.value = CUT_OFFSET;
         offsetLabel.textContent = `${(CUT_OFFSET * UNIT_SCALE).toFixed(1)} m`;
@@ -2020,6 +2118,8 @@
       applyBase(BASE_Y);
     }
     controls.update();
+    satRevealCurrent += (satRevealTarget - satRevealCurrent) * (1 - Math.pow(0.008, dt));
+    if (terrainShader) terrainShader.uniforms.uSatReveal.value = satRevealCurrent;
     if (contourCandidates.length) syncContourLabels();
     if (contourLabelPool.length) updateContourLabelVisibility();
     dashTime.value += 0.004;
