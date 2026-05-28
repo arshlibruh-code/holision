@@ -123,13 +123,17 @@
     .maj.active { border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.8); }
 
     /* site picker */
-    .site-sel, .site-input { flex:1; font-size:11px; padding:4px 8px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.85); border-radius:2px; font-family:'Share Tech Mono', monospace; outline:none; transition:all 0.15s; }
-    .site-sel:hover, .site-input:hover, .site-sel:focus, .site-input:focus { border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.08); }
+    .site-sel { flex:1; font-size:11px; padding:4px 8px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.85); border-radius:2px; font-family:'Share Tech Mono', monospace; outline:none; transition:all 0.15s; }
+    .site-sel:hover, .site-sel:focus { border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.08); }
+    .latlon-input { border:none; background:transparent; outline:none; font-size:11px; font-family:'Share Tech Mono', monospace; color:rgba(255,255,255,0.6); text-align:right; width:100%; cursor:text; }
+    .latlon-input:focus { color:rgba(255,255,255,0.9); }
     .site-sel option { background:#0b0d10; color:#cfd2d6; }
     .site-sel.loading { opacity:0.5; pointer-events:none; }
 
     /* pan compass */
-    .pan-grid { display:flex; align-items:center; gap:10px; margin:2px 0; }
+    .pan-grid { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:2px 0; }
+    .nav-info { flex:1; }
+    .nav-desc { font-size:10px; font-family:'Share Tech', sans-serif; color:rgba(255,255,255,0.25); margin:4px 0 0; line-height:1.4; }
     .compass-rose { width:92px; height:55px; flex-shrink:0; }
     .compass-rose .pan { cursor:pointer; }
     .compass-rose .pan .fin { fill:#17171A; stroke:#313134; stroke-width:2; }
@@ -148,7 +152,9 @@
     .tog[data-mode="cut"].active    { background:rgba(245,20,20,0.1);   border-color:rgba(255,80,80,0.5);   color:rgba(255,150,150,0.9); }
     .tog[data-mode="fill"].active   { background:rgba(8,155,223,0.1);   border-color:rgba(8,155,223,0.5);   color:rgba(90,200,255,0.9); }
     .tog[data-mode="ann"].active,
+    .tog[data-mode="lines"].active,
     .tog[data-mode="contour"].active { background:rgba(255,255,255,0.12); border-color:rgba(255,255,255,0.35); color:rgba(255,255,255,0.85); }
+    .tog.suppressed { opacity:0.35; pointer-events:none; }
     .tog[data-mode="sat"].active     { background:rgba(60,180,100,0.1);   border-color:rgba(60,200,100,0.5);  color:rgba(120,230,150,0.9); }
 
     /* ctrl button */
@@ -265,6 +271,35 @@
       transition:color 0.2s; pointer-events:all;
     }
     .credit:hover { color:rgba(255,255,255,0.4); }
+
+    /* responsive panel */
+    .fp { max-height: calc(100vh - 60px); overflow-y: auto; scrollbar-width: none; }
+    .fp::-webkit-scrollbar { display: none; }
+    .panel-zone { transform-origin: bottom right; }
+    @media (min-width: 769px) and (max-width: 1100px) { .panel-zone { transform: scale(0.88); } }
+
+    /* tablet + mobile: bottom sheet */
+    @media (max-width: 768px) {
+      .util-strip { top: 10px; bottom: auto; }
+      .panel-zone {
+        transform: none !important;
+        bottom: 0; left: 0; right: 0;
+        transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      .panel-zone.hidden { display: block !important; transform: translateY(100%); }
+      .fp {
+        border-radius: 14px 14px 0 0;
+        max-height: 65vh; width: 100%; box-sizing: border-box;
+        padding-top: 20px;
+      }
+      .fp::before {
+        content: ''; display: block;
+        width: 36px; height: 4px;
+        background: rgba(255,255,255,0.2); border-radius: 2px;
+        margin: -12px auto 12px;
+      }
+    }
+    @media (max-width: 768px) and (max-height: 500px) { .fp { max-height: 80vh; } }
   </style>
   <script type="importmap">
   {
@@ -290,16 +325,6 @@
 <div class="panel-zone" id="ctrl-panel">
   <div class="fp">
     <div class="grp">
-      <div class="tog-grid" id="mode-btns">
-        <button data-mode="cut"     class="tog active" style="grid-column:span 2">Cut</button>
-        <button data-mode="fill"    class="tog active" style="grid-column:span 2">Fill</button>
-        <button data-mode="sat"     class="tog active" style="grid-column:span 2">Satellite</button>
-        <button data-mode="ann"     class="tog active" style="grid-column:span 3">Annotations</button>
-        <button data-mode="contour" class="tog active" style="grid-column:span 3">Contour Labels</button>
-      </div>
-    </div>
-
-    <div class="grp">
       <div class="fp-row" style="align-items:center;">
         <div class="fc-lbl">Site</div>
         <select id="site-select" class="site-sel">
@@ -313,13 +338,13 @@
           <option value="kilimanjaro">Kilimanjaro</option>
           <option value="crater-lake">Crater Lake</option>
           <option value="death-valley">Death Valley</option>
+          <option value="hvannadalshnjukur">Hvannadalshnjúkur</option>
           <option value="custom">Custom…</option>
         </select>
       </div>
-      <div class="csr" id="site-custom-row" style="display:none;">
-        <div class="csr-fill"></div>
+      <div class="csr" id="site-custom-row">
         <span class="csr-label">Lat, Lon</span>
-        <input type="text" id="site-latlon" placeholder="40.52, -112.15" class="site-input">
+        <input type="text" id="site-latlon" placeholder="40.52, -112.15" class="latlon-input">
       </div>
       <div class="csr">
         <div class="csr-fill"></div>
@@ -328,6 +353,9 @@
         <input type="range" id="zoom-slider" min="8" max="14" step="1" value="13">
       </div>
       <div class="pan-grid">
+        <div class="nav-info">
+          <p class="nav-desc">Shift terrain one tile<br>in any cardinal direction</p>
+        </div>
         <svg class="compass-rose" viewBox="0 0 92 55" fill="none" xmlns="http://www.w3.org/2000/svg">
           <g class="pan pan-up">
             <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M45.9141 1.41406L47.4141 2.91406L60.9141 16.4141L62.4141 17.9141V25.4141H47.4141H44.4141H29.4141V17.9141L30.9141 16.4141L44.4141 2.91406L45.9141 1.41406Z"/>
@@ -346,7 +374,14 @@
             <path class="ltr" d="M10.9124 32.6504L9.41406 27.4141H10.6234L11.4902 31.0524H11.5337L12.4899 27.4141H13.5254L14.4791 31.0601H14.5251L15.3919 27.4141H16.6013L15.103 32.6504H14.024L13.0268 29.2268H12.9859L11.9913 32.6504H10.9124Z"/>
           </g>
         </svg>
-        <div class="pan-readout" id="pan-readout">—</div>
+      </div>
+      <div class="tog-grid" id="mode-btns">
+        <button data-mode="cut"     class="tog active" style="grid-column:span 2">Cut</button>
+        <button data-mode="fill"    class="tog active" style="grid-column:span 2">Fill</button>
+        <button data-mode="sat"     class="tog active" style="grid-column:span 2">Satellite</button>
+        <button data-mode="ann"     class="tog active" style="grid-column:span 2">Annotations</button>
+        <button data-mode="lines"   class="tog active" style="grid-column:span 2">Contours</button>
+        <button data-mode="contour" class="tog active" style="grid-column:span 2">Contour Labels</button>
       </div>
       <div class="csr">
         <div class="csr-fill"></div>
@@ -487,7 +522,7 @@
   const cutTrunkMid  = new THREE.Vector3();
   const fillTrunkMid = new THREE.Vector3();
   let cutAnnActive = false, fillAnnActive = false;
-  let showAnns = true, showContours = true;
+  let showAnns = true, showContours = true, showLines = true;
   let netLineAlpha = 0, netLineTgt = 0, prevTs = 0;
   let annFade = 1, annFadeTgt = 1;
   let cutTotalVol = 0, fillTotalVol = 0;
@@ -534,6 +569,7 @@
     'kilimanjaro':   { lat: -3.0674, lon:  37.3556, z: 12, name: 'Kilimanjaro' },
     'crater-lake':   { lat: 42.9446, lon:-122.1090, z: 13, name: 'Crater Lake' },
     'death-valley':  { lat: 36.5054, lon:-116.9347, z: 12, name: 'Death Valley' },
+    'hvannadalshnjukur': { lat: 64.0163, lon: -16.6806, z: 13, name: 'Hvannadalshnjúkur' },
   };
   let CURRENT_SITE = 'bingham';
 
@@ -633,6 +669,8 @@
   let satLoaded = false;
   let satRevealCurrent = 1.0;
   let satRevealTarget  = 1.0;
+  let cutRevealCurrent = 1.0, cutRevealTarget = 1.0;
+  let fillRevealCurrent = 1.0, fillRevealTarget = 1.0;
   const terrainMat = new THREE.MeshPhysicalMaterial({
     side: THREE.DoubleSide,
     roughness: 0.8,
@@ -649,7 +687,9 @@
     shader.uniforms.uHasSat    = { value: 0 };
     shader.uniforms.uPeak      = { value: ANIM_MAX };
     shader.uniforms.uLow       = { value: ANIM_MIN };
-    shader.uniforms.uSatReveal = { value: satRevealCurrent };
+    shader.uniforms.uSatReveal  = { value: satRevealCurrent };
+    shader.uniforms.uCutReveal  = { value: cutRevealCurrent };
+    shader.uniforms.uFillReveal = { value: fillRevealCurrent };
     terrainShader = shader;
 
     // apply satellite texture if it arrived before first compile
@@ -666,7 +706,7 @@
       '#include <begin_vertex>\nvTerrainY = position.y;\nvTerrainUV = vec2(position.x / 22.0 + 0.5, position.z / 22.0 + 0.5);'
     );
 
-    shader.fragmentShader = 'varying float vTerrainY;\nvarying vec2 vTerrainUV;\nuniform float uBaseY;\nuniform int uViewMode;\nuniform sampler2D uSatMap;\nuniform int uHasSat;\nuniform float uPeak;\nuniform float uLow;\nuniform float uSatReveal;\n' + shader.fragmentShader;
+    shader.fragmentShader = 'varying float vTerrainY;\nvarying vec2 vTerrainUV;\nuniform float uBaseY;\nuniform int uViewMode;\nuniform sampler2D uSatMap;\nuniform int uHasSat;\nuniform float uPeak;\nuniform float uLow;\nuniform float uSatReveal;\nuniform float uCutReveal;\nuniform float uFillReveal;\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
       `
@@ -684,15 +724,13 @@
       float fillT = clamp((uBaseY - vTerrainY) / fillRange, 0.0, 1.0);
       float blend = pow(isCut ? cutT : fillT, 0.6);
 
+      float cutRevMask  = smoothstep(1.0 - uCutReveal  - 0.08, 1.0 - uCutReveal  + 0.08, cutT);
+      float fillRevMask = smoothstep(1.0 - uFillReveal - 0.08, 1.0 - uFillReveal + 0.08, fillT);
       vec3 zoneCol;
       if (uViewMode == 3) {
         zoneCol = satCol;
-      } else if (uViewMode == 0) {
-        zoneCol = isCut ? mix(satCol, cutCol, blend) : mix(satCol, fillCol, blend);
-      } else if (uViewMode == 1) {
-        zoneCol = isCut ? mix(satCol, cutCol, blend) : satCol;
       } else {
-        zoneCol = isCut ? satCol : mix(satCol, fillCol, blend);
+        zoneCol = isCut ? mix(satCol, cutCol, blend * cutRevMask) : mix(satCol, fillCol, blend * fillRevMask);
       }
       diffuseColor.rgb = zoneCol;
       diffuseColor.a = 1.0;
@@ -769,11 +807,8 @@
 
   rebuildTerrain();
 
-  function rebuildContour(baseY) {
-    const verts = [];
-    const ringVerts = [];
-    const wallPts = [];
-
+  function computeContour(baseY) {
+    const verts = [], ringVerts = [], wallPts = [];
     for (let i = 0; i < srcIdx.length; i += 3) {
       const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
       const ha = heights[a], hb = heights[b], hc = heights[c];
@@ -781,81 +816,92 @@
       for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
         if ((hp < baseY) !== (hq < baseY)) {
           const t = (baseY - hp) / (hq - hp);
-          pts.push(
-            txCache[p] + t * (txCache[q] - txCache[p]),
-            tzCache[p] + t * (tzCache[q] - tzCache[p])
-          );
+          pts.push(txCache[p] + t*(txCache[q]-txCache[p]), tzCache[p] + t*(tzCache[q]-tzCache[p]));
         }
       }
       if (pts.length === 4) {
-        verts.push(pts[0], baseY + 0.02, pts[1], pts[2], baseY + 0.02, pts[3]);
+        verts.push(pts[0], baseY+0.02, pts[1], pts[2], baseY+0.02, pts[3]);
         ringVerts.push(pts[0], baseY, pts[1], pts[2], baseY, pts[3]);
         wallPts.push(pts[0], pts[1], pts[2], pts[3]);
       }
     }
-
-    const wallVerts = [], wallGrads = [];
-    const fillWallVerts = [], fillWallGrads = [];
-    const placed = [];
-    const minD2 = wallSpacing * wallSpacing;
+    const wallVerts = [], wallGrads = [], fillWallVerts = [], fillWallGrads = [];
+    const cellSize = wallSpacing;
+    const minD2 = cellSize * cellSize;
+    const grid = new Map();
     for (let i = 0; i < wallPts.length; i += 2) {
-      const wx = wallPts[i], wz = wallPts[i + 1];
+      const wx = wallPts[i], wz = wallPts[i+1];
+      const cx = Math.floor(wx/cellSize), cz = Math.floor(wz/cellSize);
       let tooClose = false;
-      for (let j = 0; j < placed.length; j += 2) {
-        const dx = wx - placed[j], dz = wz - placed[j + 1];
-        if (dx*dx + dz*dz < minD2) { tooClose = true; break; }
+      outer: for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const cell = grid.get((cx+dx)*65521 + (cz+dz));
+          if (!cell) continue;
+          for (let j = 0; j < cell.length; j += 2) {
+            const ex = wx-cell[j], ez = wz-cell[j+1];
+            if (ex*ex + ez*ez < minD2) { tooClose = true; break outer; }
+          }
+        }
       }
       if (!tooClose) {
-        wallVerts.push(wx, baseY, wz,  wx, baseY, wz);
+        const key = cx*65521 + cz;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(wx, wz);
+        wallVerts.push(wx, baseY, wz, wx, baseY, wz);
         wallGrads.push(0, 1);
-        fillWallVerts.push(wx, baseY, wz,  wx, baseY, wz);
+        fillWallVerts.push(wx, baseY, wz, wx, baseY, wz);
         fillWallGrads.push(0, 1);
-        placed.push(wx, wz);
       }
     }
+    return {
+      contour:     new Float32Array(verts),
+      cutBase:     new Float32Array(ringVerts),
+      cutWall:     new Float32Array(wallVerts),
+      cutWallGrad: new Float32Array(wallGrads),
+      fillWall:    new Float32Array(fillWallVerts),
+      fillWallGrad:new Float32Array(fillWallGrads),
+    };
+  }
 
-    contourGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
-    cutBaseGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ringVerts), 3));
-    cutWallGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(wallVerts), 3));
-    cutWallGeo.setAttribute('grad', new THREE.BufferAttribute(new Float32Array(wallGrads), 1));
-    fillWallGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(fillWallVerts), 3));
-    fillWallGeo.setAttribute('grad', new THREE.BufferAttribute(new Float32Array(fillWallGrads), 1));
+  function rebuildContour(baseY) {
+    const d = computeContour(baseY);
+    contourGeo.setAttribute('position', new THREE.BufferAttribute(d.contour, 3));
+    cutBaseGeo.setAttribute('position', new THREE.BufferAttribute(d.cutBase, 3));
+    cutWallGeo.setAttribute('position', new THREE.BufferAttribute(d.cutWall, 3));
+    cutWallGeo.setAttribute('grad',     new THREE.BufferAttribute(d.cutWallGrad, 1));
+    fillWallGeo.setAttribute('position',new THREE.BufferAttribute(d.fillWall, 3));
+    fillWallGeo.setAttribute('grad',    new THREE.BufferAttribute(d.fillWallGrad, 1));
   }
 
   let MINOR_INTERVAL = 0.05;
   let wallSpacing = 0.5;
   let MAJOR_N = 10;
+  let ghostMinorBaseOpacity = 0.12;
+  let ghostMajorBaseOpacity = 1.0;
+  let linesOpacity = 1.0, linesOpacityTarget = 1.0;
+  let linesDisplayInterval = MINOR_INTERVAL;
+  let linesIntervalTarget  = MINOR_INTERVAL;
+  let linesAnimating = false;
+  let linesRebuildTs = 0;
 
   const ghostMinorGeo     = new THREE.BufferGeometry();
   const ghostMajorGeo     = new THREE.BufferGeometry();
   const ghostFillMinorGeo = new THREE.BufferGeometry();
   const ghostFillMajorGeo = new THREE.BufferGeometry();
 
-  function rebuildGhostViz(baseY) {
-    const minorVerts = [];
-    const majorVerts = [];
-
+  function computeGhostViz(baseY, interval = MINOR_INTERVAL) {
+    const minorVerts = [], majorVerts = [], candidates = [];
     let gMin = Infinity, gMax = -Infinity;
     for (let i = 0; i < tPos.count; i++) {
-      if (heights[i] > baseY) {
-        gMin = Math.min(gMin, heights[i]);
-        gMax = Math.max(gMax, heights[i]);
-      }
+      if (heights[i] > baseY) { gMin = Math.min(gMin, heights[i]); gMax = Math.max(gMax, heights[i]); }
     }
-    if (gMin === Infinity) {
-      ghostMinorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-      ghostMajorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-      return;
-    }
-
-    const majorInterval = MINOR_INTERVAL * MAJOR_N;
-    const startLevel = Math.ceil(gMin / MINOR_INTERVAL) * MINOR_INTERVAL;
-
-    for (let level = startLevel; level <= gMax + 1e-6; level += MINOR_INTERVAL) {
-      const isMajor = Math.abs(Math.round(level / majorInterval) * majorInterval - level) < MINOR_INTERVAL * 0.01;
+    if (gMin === Infinity) return { minor: new Float32Array(0), major: new Float32Array(0), candidates };
+    const majorInterval = interval * MAJOR_N;
+    const startLevel = Math.ceil(gMin / interval) * interval;
+    for (let level = startLevel; level <= gMax + 1e-6; level += interval) {
+      const isMajor = Math.abs(Math.round(level/majorInterval)*majorInterval - level) < interval*0.01;
       const target = isMajor ? majorVerts : minorVerts;
       const levelCandidates = [];
-
       for (let i = 0; i < srcIdx.length; i += 3) {
         const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
         if (!(heights[a] > baseY && heights[b] > baseY && heights[c] > baseY)) continue;
@@ -863,8 +909,8 @@
         const pts = [];
         for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
           if ((hp < level) !== (hq < level)) {
-            const t = (level - hp) / (hq - hp);
-            pts.push(txCache[p] + t*(txCache[q]-txCache[p]), level, tzCache[p] + t*(tzCache[q]-tzCache[p]));
+            const t = (level-hp)/(hq-hp);
+            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level, tzCache[p]+t*(tzCache[q]-tzCache[p]));
           }
         }
         if (pts.length === 6) {
@@ -872,47 +918,36 @@
           if (isMajor) {
             const mx = (pts[0]+pts[3])/2, mz = (pts[2]+pts[5])/2;
             let ok = true;
-            for (const c of levelCandidates) {
-              const dx = mx-c[0], dz = mz-c[1];
-              if (dx*dx + dz*dz < 2.25) { ok = false; break; }
-            }
+            for (const c of levelCandidates) { const dx=mx-c[0],dz=mz-c[1]; if(dx*dx+dz*dz<2.25){ok=false;break;} }
             if (ok) levelCandidates.push([mx, mz]);
           }
         }
       }
-      for (const [cx, cz] of levelCandidates) {
-        contourCandidates.push({ x: cx, y: level, z: cz, level, type: 'cut' });
-      }
+      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level, z:cz, level, type:'cut' });
     }
-
-    ghostMinorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(minorVerts), 3));
-    ghostMajorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(majorVerts), 3));
+    return { minor: new Float32Array(minorVerts), major: new Float32Array(majorVerts), candidates };
   }
 
-  function rebuildFillGhostViz(baseY) {
-    const minorVerts = [], majorVerts = [];
+  function rebuildGhostViz(baseY) {
+    const { minor, major, candidates } = computeGhostViz(baseY);
+    ghostMinorGeo.setAttribute('position', new THREE.BufferAttribute(minor, 3));
+    ghostMajorGeo.setAttribute('position', new THREE.BufferAttribute(major, 3));
+    for (const c of candidates) contourCandidates.push(c);
+  }
 
+  function computeFillGhostViz(baseY, interval = MINOR_INTERVAL) {
+    const minorVerts = [], majorVerts = [], candidates = [];
     let gMin = Infinity, gMax = -Infinity;
     for (let i = 0; i < tPos.count; i++) {
-      if (heights[i] < baseY) {
-        gMin = Math.min(gMin, heights[i]);
-        gMax = Math.max(gMax, heights[i]);
-      }
+      if (heights[i] < baseY) { gMin = Math.min(gMin, heights[i]); gMax = Math.max(gMax, heights[i]); }
     }
-    if (gMin === Infinity) {
-      ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-      ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-      return;
-    }
-
-    const majorInterval = MINOR_INTERVAL * MAJOR_N;
-    const startLevel = Math.ceil(gMin / MINOR_INTERVAL) * MINOR_INTERVAL;
-
-    for (let level = startLevel; level <= gMax + 1e-6; level += MINOR_INTERVAL) {
-      const isMajor = Math.abs(Math.round(level / majorInterval) * majorInterval - level) < MINOR_INTERVAL * 0.01;
+    if (gMin === Infinity) return { minor: new Float32Array(0), major: new Float32Array(0), candidates };
+    const majorInterval = interval * MAJOR_N;
+    const startLevel = Math.ceil(gMin / interval) * interval;
+    for (let level = startLevel; level <= gMax + 1e-6; level += interval) {
+      const isMajor = Math.abs(Math.round(level/majorInterval)*majorInterval - level) < interval*0.01;
       const target = isMajor ? majorVerts : minorVerts;
       const levelCandidates = [];
-
       for (let i = 0; i < srcIdx.length; i += 3) {
         const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
         if (!(heights[a] < baseY && heights[b] < baseY && heights[c] < baseY)) continue;
@@ -920,8 +955,8 @@
         const pts = [];
         for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
           if ((hp < level) !== (hq < level)) {
-            const t = (level - hp) / (hq - hp);
-            pts.push(txCache[p] + t*(txCache[q]-txCache[p]), level, tzCache[p] + t*(tzCache[q]-tzCache[p]));
+            const t = (level-hp)/(hq-hp);
+            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level, tzCache[p]+t*(tzCache[q]-tzCache[p]));
           }
         }
         if (pts.length === 6) {
@@ -929,21 +964,21 @@
           if (isMajor) {
             const mx = (pts[0]+pts[3])/2, mz = (pts[2]+pts[5])/2;
             let ok = true;
-            for (const c of levelCandidates) {
-              const dx = mx-c[0], dz = mz-c[1];
-              if (dx*dx + dz*dz < 2.25) { ok = false; break; }
-            }
+            for (const c of levelCandidates) { const dx=mx-c[0],dz=mz-c[1]; if(dx*dx+dz*dz<2.25){ok=false;break;} }
             if (ok) levelCandidates.push([mx, mz]);
           }
         }
       }
-      for (const [cx, cz] of levelCandidates) {
-        contourCandidates.push({ x: cx, y: level, z: cz, level, type: 'fill' });
-      }
+      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level, z:cz, level, type:'fill' });
     }
+    return { minor: new Float32Array(minorVerts), major: new Float32Array(majorVerts), candidates };
+  }
 
-    ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(minorVerts), 3));
-    ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(majorVerts), 3));
+  function rebuildFillGhostViz(baseY) {
+    const { minor, major, candidates } = computeFillGhostViz(baseY);
+    ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(minor, 3));
+    ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(major, 3));
+    for (const c of candidates) contourCandidates.push(c);
   }
 
   function makeGlowTexture() {
@@ -1143,6 +1178,55 @@
     fillTotalVol = totalVol;
     setLineDistances(fillBranchGeo);
     setLineDistances(fillTrunkGeo);
+  }
+
+  const baseCache = new Map();
+  let precomputeRaf = null;
+  const CACHE_MIN = -2, CACHE_MAX = 6, CACHE_STEP = 0.05;
+  const CACHE_STEPS = Math.round((CACHE_MAX - CACHE_MIN) / CACHE_STEP) + 1;
+
+  function schedulePrecompute() {
+    baseCache.clear();
+    if (precomputeRaf) cancelAnimationFrame(precomputeRaf);
+    let step = 0;
+    function tick() {
+      const t0 = performance.now();
+      while (step < CACHE_STEPS && performance.now() - t0 < 8) {
+        const by = CACHE_MIN + step * CACHE_STEP;
+        const g  = computeGhostViz(by);
+        const gf = computeFillGhostViz(by);
+        const ct = computeContour(by);
+        baseCache.set(step, {
+          minor: g.minor, major: g.major,
+          fillMinor: gf.minor, fillMajor: gf.major,
+          contour: ct.contour, cutBase: ct.cutBase,
+          cutWall: ct.cutWall, cutWallGrad: ct.cutWallGrad,
+          fillWall: ct.fillWall, fillWallGrad: ct.fillWallGrad,
+          candidates: [...g.candidates, ...gf.candidates],
+        });
+        step++;
+      }
+      if (step < CACHE_STEPS) precomputeRaf = requestAnimationFrame(tick);
+    }
+    precomputeRaf = requestAnimationFrame(tick);
+  }
+
+  function applyFromCache(stepIdx) {
+    const c = baseCache.get(stepIdx);
+    if (!c) return false;
+    ghostMinorGeo.setAttribute('position',  new THREE.BufferAttribute(c.minor, 3));
+    ghostMajorGeo.setAttribute('position',  new THREE.BufferAttribute(c.major, 3));
+    ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(c.fillMinor, 3));
+    ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(c.fillMajor, 3));
+    contourGeo.setAttribute('position',     new THREE.BufferAttribute(c.contour, 3));
+    cutBaseGeo.setAttribute('position',     new THREE.BufferAttribute(c.cutBase, 3));
+    cutWallGeo.setAttribute('position',     new THREE.BufferAttribute(c.cutWall, 3));
+    cutWallGeo.setAttribute('grad',         new THREE.BufferAttribute(c.cutWallGrad, 1));
+    fillWallGeo.setAttribute('position',    new THREE.BufferAttribute(c.fillWall, 3));
+    fillWallGeo.setAttribute('grad',        new THREE.BufferAttribute(c.fillWallGrad, 1));
+    contourCandidates.length = 0;
+    for (const cd of c.candidates) contourCandidates.push(cd);
+    return true;
   }
 
   let lastBaseY = -Infinity;
@@ -1405,7 +1489,7 @@
   }
 
   function updateContourLabelVisibility() {
-    if (!showContours) { contourLabelPool.forEach(e => { e.div.style.opacity = '0'; }); return; }
+    if (!showContours || !showLines) { contourLabelPool.forEach(e => { e.div.style.opacity = '0'; }); return; }
     const MIN_PX2 = 80 * 80;
     const shown = [];
     contourLabelPool.forEach((entry, i) => {
@@ -1578,6 +1662,7 @@
     uBaseY: { value: BASE_Y },
     uCutOffset: { value: CUT_OFFSET },
     uFillOffset: { value: FILL_OFFSET },
+    uReveal: { value: 1.0 },
   };
   function makeWallMat(offsetSign) {
     return new THREE.ShaderMaterial({
@@ -1607,9 +1692,11 @@
         uniform vec3 uBotColor;
         uniform float uTopAlpha;
         uniform float uBotAlpha;
+        uniform float uReveal;
         varying float vGrad;
         void main() {
-          gl_FragColor = vec4(mix(uBotColor, uTopColor, vGrad), mix(uBotAlpha, uTopAlpha, vGrad));
+          float revMask = smoothstep(1.0 - uReveal - 0.06, 1.0 - uReveal + 0.06, vGrad);
+          gl_FragColor = vec4(mix(uBotColor, uTopColor, vGrad), mix(uBotAlpha, uTopAlpha, vGrad) * revMask);
           #include <fog_fragment>
         }
       `,
@@ -1710,15 +1797,13 @@
   const panDown   = document.querySelector('.pan-down');
   const panLeft   = document.querySelector('.pan-left');
   const panRight  = document.querySelector('.pan-right');
-  const panReadout = document.getElementById('pan-readout');
-
   function updatePanState() {
     const { x, y, z } = currentTile;
     const n = 2 ** z;
     panUp.classList.toggle('disabled',   y <= 0);
     panDown.classList.toggle('disabled', y >= n - 1);
     const { lat, lon } = tileCenterLatLon(x, y, z);
-    panReadout.textContent = `x ${x}\ny ${y}\nz ${z}\n${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
+    siteLatLon.value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   }
 
   async function loadTile(x, y, z) {
@@ -1737,6 +1822,8 @@
       VOL_SCALE  = UNIT_SCALE ** 3;
       rebuildTerrain();
       tuneTerrainRange();
+      baseTweenTarget = BASE_TARGET;
+      baseTweening = true;
       syncFill(document.getElementById('base-slider'));
       lastBaseY = -Infinity;
       applyBase(BASE_Y);
@@ -1765,19 +1852,15 @@
   }
 
   function getActiveSite() {
-    if (siteSelect.value === 'custom') {
-      const raw = siteLatLon.value.trim();
-      const m = raw.match(/^\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*$/);
-      if (!m) return null;
-      return { lat: parseFloat(m[1]), lon: parseFloat(m[2]) };
-    }
+    const raw = siteLatLon.value.trim();
+    const m = raw.match(/^\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*$/);
+    if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]) };
     const s = SITES[siteSelect.value];
     return s ? { lat: s.lat, lon: s.lon } : null;
   }
 
   siteSelect.addEventListener('change', () => {
     const isCustom = siteSelect.value === 'custom';
-    siteCustomRow.style.display = isCustom ? '' : 'none';
     if (isCustom) { siteLatLon.focus(); return; }
     const s = SITES[siteSelect.value];
     CURRENT_SITE = siteSelect.value;
@@ -1793,20 +1876,25 @@
   });
   zoomSlider.addEventListener('change', () => {
     const newZ = parseInt(zoomSlider.value, 10);
-    const { lat, lon } = tileCenterLatLon(currentTile.x, currentTile.y, currentTile.z);
+    const site = getActiveSite();
+    const { lat, lon } = site ?? tileCenterLatLon(currentTile.x, currentTile.y, currentTile.z);
     changeSite(lat, lon, newZ);
   });
 
-  siteLatLon.addEventListener('change', () => {
-    const site = getActiveSite();
-    if (!site) { alert('Format: lat, lon  e.g. 40.52, -112.15'); return; }
-    changeSite(site.lat, site.lon, parseInt(zoomSlider.value, 10));
-  });
+  function submitLatLon() {
+    const raw = siteLatLon.value.trim();
+    const m = raw.match(/^\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*$/);
+    if (!m) { alert('Format: lat, lon  e.g. 40.52, -112.15'); return; }
+    siteSelect.value = 'custom';
+    changeSite(parseFloat(m[1]), parseFloat(m[2]), parseInt(zoomSlider.value, 10));
+    siteLatLon.blur();
+  }
+  siteLatLon.addEventListener('change', submitLatLon);
+  siteLatLon.addEventListener('keydown', e => { if (e.key === 'Enter') submitLatLon(); });
 
   function pan(dx, dy) {
     const { x, y, z } = currentTile;
     siteSelect.value = 'custom';
-    siteCustomRow.style.display = '';
     loadTile(x + dx, y + dy, z);
   }
   panUp   .addEventListener('click', () => pan( 0, -1));
@@ -1873,16 +1961,18 @@
   const minorOpacitySlider = document.getElementById('minor-opacity');
   syncFill(minorOpacitySlider);
   minorOpacitySlider.addEventListener('input', () => {
-    ghostMinorMat.opacity = parseFloat(minorOpacitySlider.value);
-    document.getElementById('minor-opacity-val').textContent = parseFloat(minorOpacitySlider.value).toFixed(2);
+    ghostMinorBaseOpacity = parseFloat(minorOpacitySlider.value);
+    ghostMinorMat.opacity = ghostMinorBaseOpacity * linesOpacity;
+    document.getElementById('minor-opacity-val').textContent = ghostMinorBaseOpacity.toFixed(2);
     syncFill(minorOpacitySlider);
   });
 
   const majorOpacitySlider = document.getElementById('major-opacity');
   syncFill(majorOpacitySlider);
   majorOpacitySlider.addEventListener('input', () => {
-    ghostMajorMat.opacity = parseFloat(majorOpacitySlider.value);
-    document.getElementById('major-opacity-val').textContent = parseFloat(majorOpacitySlider.value).toFixed(2);
+    ghostMajorBaseOpacity = parseFloat(majorOpacitySlider.value);
+    ghostMajorMat.opacity = ghostMajorBaseOpacity * linesOpacity;
+    document.getElementById('major-opacity-val').textContent = ghostMajorBaseOpacity.toFixed(2);
     syncFill(majorOpacitySlider);
   });
 
@@ -1928,22 +2018,31 @@
   const slider    = document.getElementById('base-slider');
   const baseLabel = document.getElementById('base-label');
   syncFill(slider);
+  let baseDebounceTid = null;
   slider.addEventListener('input', () => {
     BASE_Y = parseFloat(slider.value);
     baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
     syncFill(slider);
-    applyBase(BASE_Y);
+    if (base) base.position.y = BASE_Y;
+    if (terrainShader) {
+      terrainShader.uniforms.uBaseY.value    = BASE_Y;
+      terrainShader.uniforms.uViewMode.value = computeViewMode();
+    }
+    if (cwu) { cwu.uBaseY.value = BASE_Y; fwu.uBaseY.value = BASE_Y; }
+    clearTimeout(baseDebounceTid);
+    baseDebounceTid = setTimeout(() => applyBase(BASE_Y), 10);
   });
 
   document.querySelectorAll('#mode-btns button').forEach(btn => {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.mode;
       const on = btn.classList.toggle('active');
-      if (mode === 'cut')     { showCut  = on; applyBase(BASE_Y); }
-      if (mode === 'fill')    { showFill = on; applyBase(BASE_Y); }
+      if (mode === 'cut')  { showCut  = on; cutRevealTarget  = on ? 1.0 : 0.0; applyBase(BASE_Y); }
+      if (mode === 'fill') { showFill = on; fillRevealTarget = on ? 1.0 : 0.0; applyBase(BASE_Y); }
       if (mode === 'sat') {
         showSat = on;
         satRevealTarget = on ? 1.0 : 0.0;
+        if (on && terrainShader && satLoaded) terrainShader.uniforms.uHasSat.value = 1;
       }
       if (mode === 'ann') {
         showAnns = on; annFadeTgt = on ? 1 : 0;
@@ -1952,6 +2051,20 @@
         if (cutAnnActive)  cutAnn.div.style.opacity  = op;
         if (fillAnnActive) fillAnn.div.style.opacity = op;
         if (netAnn)        netAnn.div.style.opacity  = on ? (netLineTgt > 0 ? '1' : '0') : '0';
+      }
+      if (mode === 'lines') {
+        showLines = on;
+        linesAnimating = true;
+        linesOpacityTarget   = on ? 1.0 : 0.0;
+        linesIntervalTarget  = on ? MINOR_INTERVAL : (ANIM_MAX - ANIM_MIN) * 1.2;
+        linesDisplayInterval = on ? (ANIM_MAX - ANIM_MIN) * 1.2 : MINOR_INTERVAL;
+        if (on) { linesOpacity = 0; ghostMinorMat.opacity = 0; ghostMajorMat.opacity = 0; }
+        if (ghostGroup)     ghostGroup.visible     = true;
+        if (ghostFillGroup) ghostFillGroup.visible = true;
+        if (contourLine) contourLine.visible = on;
+        if (cutBaseGroup) cutBaseGroup.visible = on;
+        document.querySelector('.tog[data-mode="contour"]')?.classList.toggle('suppressed', !on);
+        if (!on) contourLabelPool.forEach(e => { e.div.style.opacity = '0'; });
       }
       if (mode === 'contour') {
         showContours = on;
@@ -1970,6 +2083,8 @@
 
   let isAnimating = false;
   let animStart = 0;
+  let baseTweening = false;
+  let baseTweenTarget = 0;
 
   const animBtn = document.getElementById('anim-btn');
   animBtn.addEventListener('click', () => {
@@ -2117,9 +2232,71 @@
       syncFill(slider);
       applyBase(BASE_Y);
     }
+    if (baseTweening && !isAnimating) {
+      BASE_Y += (baseTweenTarget - BASE_Y) * (1 - Math.pow(0.008, dt));
+      if (Math.abs(BASE_Y - baseTweenTarget) < 0.025) { BASE_Y = baseTweenTarget; baseTweening = false; }
+      BASE_Y = Math.round(BASE_Y / 0.05) * 0.05;
+      slider.value = BASE_Y;
+      baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+      syncFill(slider);
+      applyBase(BASE_Y);
+    }
     controls.update();
     satRevealCurrent += (satRevealTarget - satRevealCurrent) * (1 - Math.pow(0.008, dt));
     if (terrainShader) terrainShader.uniforms.uSatReveal.value = satRevealCurrent;
+    cutRevealCurrent  += (cutRevealTarget  - cutRevealCurrent)  * (1 - Math.pow(0.008, dt));
+    fillRevealCurrent += (fillRevealTarget - fillRevealCurrent) * (1 - Math.pow(0.008, dt));
+    if (Math.abs(cutRevealCurrent  - cutRevealTarget)  < 0.003) cutRevealCurrent  = cutRevealTarget;
+    if (Math.abs(fillRevealCurrent - fillRevealTarget) < 0.003) fillRevealCurrent = fillRevealTarget;
+    if (terrainShader) {
+      terrainShader.uniforms.uCutReveal.value  = cutRevealCurrent;
+      terrainShader.uniforms.uFillReveal.value = fillRevealCurrent;
+    }
+    if (cwu) cwu.uReveal.value = cutRevealCurrent;
+    if (fwu) fwu.uReveal.value = fillRevealCurrent;
+    if (!linesAnimating) {
+      if (ghostGroup)     ghostGroup.visible     = showLines;
+      if (ghostFillGroup) ghostFillGroup.visible = showLines;
+      if (cutBaseGroup)   cutBaseGroup.visible   = showLines;
+    }
+    if (linesAnimating) {
+      linesOpacity         += (linesOpacityTarget  - linesOpacity)         * (1 - Math.pow(0.005, dt));
+      linesDisplayInterval += (linesIntervalTarget - linesDisplayInterval) * (1 - Math.pow(0.005, dt));
+      ghostMinorMat.opacity = ghostMinorBaseOpacity * linesOpacity;
+      ghostMajorMat.opacity = ghostMajorBaseOpacity * linesOpacity;
+      if (linesOpacity < 0.01 && linesOpacityTarget === 0) {
+        if (ghostGroup)     ghostGroup.visible     = false;
+        if (ghostFillGroup) ghostFillGroup.visible = false;
+      }
+      const now = performance.now();
+      if (now - linesRebuildTs > 80) {
+        linesRebuildTs = now;
+        const g  = computeGhostViz(BASE_Y, linesDisplayInterval);
+        const gf = computeFillGhostViz(BASE_Y, linesDisplayInterval);
+        ghostMinorGeo.setAttribute('position', new THREE.BufferAttribute(g.minor, 3));
+        ghostMajorGeo.setAttribute('position',  new THREE.BufferAttribute(g.major, 3));
+        ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(gf.minor, 3));
+        ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(gf.major, 3));
+      }
+      if (Math.abs(linesOpacity - linesOpacityTarget) < 0.005 && Math.abs(linesDisplayInterval - linesIntervalTarget) < 0.001) {
+        linesOpacity = linesOpacityTarget;
+        linesDisplayInterval = linesIntervalTarget;
+        linesAnimating = false;
+        ghostMinorMat.opacity = ghostMinorBaseOpacity * linesOpacity;
+        ghostMajorMat.opacity = ghostMajorBaseOpacity * linesOpacity;
+        if (linesOpacity > 0) {
+          const g  = computeGhostViz(BASE_Y, MINOR_INTERVAL);
+          const gf = computeFillGhostViz(BASE_Y, MINOR_INTERVAL);
+          ghostMinorGeo.setAttribute('position', new THREE.BufferAttribute(g.minor, 3));
+          ghostMajorGeo.setAttribute('position',  new THREE.BufferAttribute(g.major, 3));
+          ghostFillMinorGeo.setAttribute('position', new THREE.BufferAttribute(gf.minor, 3));
+          ghostFillMajorGeo.setAttribute('position', new THREE.BufferAttribute(gf.major, 3));
+        }
+        if (ghostGroup)     ghostGroup.visible     = showLines;
+        if (ghostFillGroup) ghostFillGroup.visible = showLines;
+        if (cutBaseGroup)   cutBaseGroup.visible   = showLines;
+      }
+    }
     if (contourCandidates.length) syncContourLabels();
     if (contourLabelPool.length) updateContourLabelVisibility();
     dashTime.value += 0.004;
