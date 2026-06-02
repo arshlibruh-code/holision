@@ -24,6 +24,42 @@
       opacity: 1;
     }
     #intro-overlay.fade { opacity: 0; }
+    #intro-overlay.fade #load-boxes { display: none; }
+    #load-boxes {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex; gap: 4px; align-items: center;
+    }
+    #tile-loader {
+      position: fixed;
+      bottom: 18px; left: 50%;
+      transform: translateX(-50%);
+      display: none; gap: 4px; align-items: center;
+      z-index: 50;
+    }
+    #tile-loader.active { display: flex; }
+    .lb {
+      width: 9px; height: 9px;
+      border: 1px solid rgba(8,155,223,0.6);
+      background: rgba(8,155,223,0.45);
+      opacity: 0;
+      will-change: opacity;
+      animation: lb-seq 0.8s linear infinite;
+    }
+    .lb:nth-child(1) { animation-delay: 0s; }
+    .lb:nth-child(2) { animation-delay: -0.72s; }
+    .lb:nth-child(3) { animation-delay: -0.64s; }
+    .lb:nth-child(4) { animation-delay: -0.56s; }
+    .lb:nth-child(5) { animation-delay: -0.48s; }
+    @keyframes lb-seq {
+      0%  { opacity: 1; }
+      10% { opacity: 0.4; }
+      20% { opacity: 0.1; }
+      30% { opacity: 0; }
+      90% { opacity: 0; }
+      100%{ opacity: 1; }
+    }
 
     /* util strip */
     .util-strip {
@@ -276,6 +312,21 @@
       transition:color 0.2s; pointer-events:all;
     }
     .credit:hover { color:rgba(255,255,255,0.4); }
+    #geo-hud {
+      position:fixed; bottom:48px; left:50%;
+      transform:translateX(-50%);
+      text-align:center; pointer-events:none; z-index:50;
+      display:flex; flex-direction:column; align-items:center; gap:3px;
+    }
+    #geo-hud .hud-name {
+      font-family:'Share Tech', sans-serif; font-size:14px;
+      font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+      color:rgba(255,255,255,0.72); white-space:nowrap;
+    }
+    #geo-hud .hud-coords {
+      font-family:'Share Tech Mono', monospace; font-size:10px;
+      letter-spacing:0.08em; color:rgba(255,255,255,0.3); white-space:nowrap;
+    }
 
     /* responsive panel */
     .fp { max-height: calc(100vh - 60px); overflow-y: auto; scrollbar-width: none; }
@@ -285,13 +336,24 @@
 
     /* tablet + mobile: bottom sheet */
     @media (max-width: 768px) {
-      .util-strip { top: 10px; bottom: auto; }
+      .util-strip { top: 10px; bottom: auto; gap: 8px; }
+      #anim-btn { display: none; }
+      .util-btn {
+        font-size: 16px; padding: 10px 14px;
+        min-width: 44px; min-height: 44px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .ctrl-btn {
+        font-size: 12px; padding: 10px 18px;
+        min-height: 44px; letter-spacing: 0.1em;
+      }
+      .site-sel { min-height: 44px; font-size: 13px; }
       .panel-zone {
-        transform: none !important;
+        transform: translateY(0);
         bottom: 0; left: 0; right: 0;
         transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
       }
-      .panel-zone.hidden { display: block !important; transform: translateY(100%); }
+      .panel-zone.hidden { display: block !important; transform: translateY(100%) !important; }
       .fp {
         border-radius: 14px 14px 0 0;
         max-height: 65vh; width: 100%; box-sizing: border-box;
@@ -317,9 +379,26 @@
 </head>
 <body>
 
-<div id="intro-overlay"></div>
+<div id="intro-overlay">
+  <div id="load-boxes">
+    <div class="lb"></div>
+    <div class="lb"></div>
+    <div class="lb"></div>
+    <div class="lb"></div>
+    <div class="lb"></div>
+  </div>
+</div>
+
+<div id="tile-loader">
+  <div class="lb"></div>
+  <div class="lb"></div>
+  <div class="lb"></div>
+  <div class="lb"></div>
+  <div class="lb"></div>
+</div>
 
 <a class="credit" href="https://github.com/arshlibruh-code/holision" target="_blank" rel="noopener">@arshlibruh / holision</a>
+<div id="geo-hud"></div>
 
 <div class="util-strip">
   <button id="anim-btn" class="util-btn" title="animate base Y">▶</button>
@@ -339,9 +418,9 @@
           <option value="matterhorn">Matterhorn</option>
           <option value="mont-blanc">Mont Blanc</option>
           <option value="half-dome">Half Dome / Yosemite</option>
-          <option value="mauna-kea">Mauna Kea</option>
+          <option value="mount-fuji">Mount Fuji</option>
           <option value="kilimanjaro">Kilimanjaro</option>
-          <option value="crater-lake">Crater Lake</option>
+          <option value="vesuvius">Vesuvius</option>
           <option value="death-valley">Death Valley</option>
           <option value="hvannadalshnjukur">Hvannadalshnjúkur</option>
           <option value="custom">Custom…</option>
@@ -362,6 +441,12 @@
         <span class="csr-label">Zoom</span>
         <span class="csr-val" id="zoom-label">13</span>
         <input type="range" id="zoom-slider" min="8" max="14" step="1" value="13">
+      </div>
+      <div class="csr">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Exaggeration</span>
+        <span class="csr-val" id="exag-label">1.0×</span>
+        <input type="range" id="exag-slider" min="0.5" max="5" step="0.1" value="1">
       </div>
       <div class="pan-grid">
         <div class="nav-info">
@@ -508,7 +593,7 @@
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x08080c);
-  scene.fog = new THREE.Fog(0x08080c, 38, 62);
+  scene.fog = new THREE.Fog(0x08080c, window.innerWidth <= 768 ? 20 : 38, 62);
 
   const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
   camera.position.set(0, 22, 40);
@@ -574,12 +659,12 @@
     'grand-canyon':  { lat: 36.0544, lon: -112.1401, z: 12, name: 'Grand Canyon' },
     'everest':       { lat: 27.9881, lon:  86.9250, z: 12, name: 'Mount Everest' },
     'matterhorn':    { lat: 45.9764, lon:   7.6586, z: 13, name: 'Matterhorn' },
-    'mont-blanc':    { lat: 45.8326, lon:   6.8652, z: 12, name: 'Mont Blanc' },
+    'mont-blanc':    { lat: 45.8326, lon:   6.8652, z: 10, name: 'Mont Blanc' },
     'half-dome':     { lat: 37.7459, lon:-119.5332, z: 13, name: 'Half Dome / Yosemite' },
-    'mauna-kea':     { lat: 19.8207, lon:-155.4681, z: 11, name: 'Mauna Kea' },
-    'kilimanjaro':   { lat: -3.0674, lon:  37.3556, z: 12, name: 'Kilimanjaro' },
-    'crater-lake':   { lat: 42.9446, lon:-122.1090, z: 13, name: 'Crater Lake' },
-    'death-valley':  { lat: 36.5054, lon:-116.9347, z: 12, name: 'Death Valley' },
+    'mount-fuji':    { lat: 35.3606, lon: 138.7274,  z: 12, name: 'Mount Fuji' },
+    'kilimanjaro':   { lat: -3.0674, lon:  37.3556, z: 11, name: 'Kilimanjaro' },
+    'vesuvius':      { lat: 40.8210, lon:  14.4260,  z: 13, name: 'Vesuvius' },
+    'death-valley':  { lat: 36.5054, lon:-116.9347, z: 9, name: 'Death Valley' },
     'hvannadalshnjukur': { lat: 64.0163, lon: -16.6806, z: 13, name: 'Hvannadalshnjúkur' },
   };
   let CURRENT_SITE = 'bingham';
@@ -650,6 +735,7 @@
   const initSite = SITES[CURRENT_SITE];
   const initXY = latLonToTile(initSite.lat, initSite.lon, initSite.z);
   let currentTile = { x: initXY.x, y: initXY.y, z: initSite.z };
+  let anchorLat = initSite.lat, anchorLon = initSite.lon;
   let elevData = await loadTerrarium(currentTile.x, currentTile.y, currentTile.z);
   let METERS_PER_UNIT = elevData.tileMeters / SIZE;
   let UNIT_SCALE = METERS_PER_UNIT;
@@ -676,6 +762,7 @@
     const c = e[y1 * 256 + x0], d = e[y1 * 256 + x1];
     return (a * (1-fx) + b * fx) * (1-fy) + (c * (1-fx) + d * fx) * fy;
   }
+  let EXAG = 1.0;
   let CUT_OFFSET = 0.0;
   let FILL_OFFSET = 0.0;
   const TARGET_CUT_OFFSET = 10.0;
@@ -825,7 +912,7 @@
       const v = (z + SIZE/2) / SIZE;
       const e = sampleElev(u, v);
       heights[i] = e / METERS_PER_UNIT;
-      tPos.setY(i, heights[i]);
+      tPos.setY(i, heights[i] * EXAG);
     }
     tPos.needsUpdate = true;
     terrainGeo.computeVertexNormals();
@@ -846,8 +933,8 @@
         }
       }
       if (pts.length === 4) {
-        verts.push(pts[0], baseY+0.02, pts[1], pts[2], baseY+0.02, pts[3]);
-        ringVerts.push(pts[0], baseY, pts[1], pts[2], baseY, pts[3]);
+        verts.push(pts[0], baseY*EXAG+0.02, pts[1], pts[2], baseY*EXAG+0.02, pts[3]);
+        ringVerts.push(pts[0], baseY*EXAG, pts[1], pts[2], baseY*EXAG, pts[3]);
         wallPts.push(pts[0], pts[1], pts[2], pts[3]);
       }
     }
@@ -873,9 +960,9 @@
         const key = cx*65521 + cz;
         if (!grid.has(key)) grid.set(key, []);
         grid.get(key).push(wx, wz);
-        wallVerts.push(wx, baseY, wz, wx, baseY, wz);
+        wallVerts.push(wx, baseY*EXAG, wz, wx, baseY*EXAG, wz);
         wallGrads.push(0, 1);
-        fillWallVerts.push(wx, baseY, wz, wx, baseY, wz);
+        fillWallVerts.push(wx, baseY*EXAG, wz, wx, baseY*EXAG, wz);
         fillWallGrads.push(0, 1);
       }
     }
@@ -936,7 +1023,7 @@
         for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
           if ((hp < level) !== (hq < level)) {
             const t = (level-hp)/(hq-hp);
-            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level, tzCache[p]+t*(tzCache[q]-tzCache[p]));
+            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level*EXAG, tzCache[p]+t*(tzCache[q]-tzCache[p]));
           }
         }
         if (pts.length === 6) {
@@ -949,7 +1036,7 @@
           }
         }
       }
-      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level, z:cz, level, type:'cut' });
+      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level*EXAG, z:cz, level, type:'cut' });
     }
     return { minor: new Float32Array(minorVerts), major: new Float32Array(majorVerts), candidates };
   }
@@ -982,7 +1069,7 @@
         for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
           if ((hp < level) !== (hq < level)) {
             const t = (level-hp)/(hq-hp);
-            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level, tzCache[p]+t*(tzCache[q]-tzCache[p]));
+            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level*EXAG, tzCache[p]+t*(tzCache[q]-tzCache[p]));
           }
         }
         if (pts.length === 6) {
@@ -995,7 +1082,7 @@
           }
         }
       }
-      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level, z:cz, level, type:'fill' });
+      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level*EXAG, z:cz, level, type:'fill' });
     }
     return { minor: new Float32Array(minorVerts), major: new Float32Array(majorVerts), candidates };
   }
@@ -1065,7 +1152,7 @@
         vol += (heights[v] - baseY) * CELL_AREA;
         if (heights[v] > maxH) { maxH = heights[v]; maxV = v; }
       }
-      islands.push({ cx: txCache[maxV], cy: maxH + CUT_OFFSET, cz: tzCache[maxV], vol });
+      islands.push({ cx: txCache[maxV], cy: maxH * EXAG + CUT_OFFSET, cz: tzCache[maxV], vol });
     }
     return islands;
   }
@@ -1152,7 +1239,7 @@
         vol += (baseY - heights[v]) * CELL_AREA;
         if (heights[v] < minH) { minH = heights[v]; minV = v; }
       }
-      islands.push({ cx: txCache[minV], cy: minH - FILL_OFFSET, cz: tzCache[minV], vol });
+      islands.push({ cx: txCache[minV], cy: minH * EXAG - FILL_OFFSET, cz: tzCache[minV], vol });
     }
     return islands;
   }
@@ -1261,7 +1348,7 @@
     const baseChanged = baseY !== lastBaseY;
     lastBaseY = baseY;
 
-    if (base) base.position.y = baseY;
+    if (base) base.position.y = baseY * EXAG;
 
     let cutVol = 0, fillVol = 0;
     for (let i = 0; i < tPos.count; i++) {
@@ -1288,12 +1375,12 @@
     }
 
     if (terrainShader) {
-      terrainShader.uniforms.uBaseY.value    = baseY;
+      terrainShader.uniforms.uBaseY.value    = baseY * EXAG;
       terrainShader.uniforms.uViewMode.value = computeViewMode();
     }
     if (cwu) {
-      cwu.uBaseY.value = baseY;
-      fwu.uBaseY.value = baseY;
+      cwu.uBaseY.value = baseY * EXAG;
+      fwu.uBaseY.value = baseY * EXAG;
       cwu.uCutOffset.value = CUT_OFFSET;
       fwu.uCutOffset.value = CUT_OFFSET;
       cwu.uFillOffset.value = FILL_OFFSET;
@@ -1599,9 +1686,9 @@
 
   function updateAnnotations(baseY) {
     // Base — anchor: right edge midpoint of base plane
-    const b1x = 11, b1y = baseY, b1z = 0;
-    const b2x = 13, b2y = baseY + 2, b2z = 0;
-    const b3x = 13.3, b3y = baseY + 2, b3z = 0;
+    const b1x = 11, b1y = baseY * EXAG, b1z = 0;
+    const b2x = 13, b2y = baseY * EXAG + 2, b2z = 0;
+    const b3x = 13.3, b3y = baseY * EXAG + 2, b3z = 0;
     const bp = baseLeader.geo.attributes.position;
     bp.setXYZ(0, b1x, b1y, b1z);
     bp.setXYZ(1, b2x, b2y, b2z);
@@ -1618,10 +1705,10 @@
       if (heights[i] > maxH) { maxH = heights[i]; maxIdx = i; }
     }
     const px = txCache[maxIdx], pz = tzCache[maxIdx];
-    const p2x = px + 2, p2y = maxH + 2, p2z = pz;
-    const p3x = px + 2.3, p3y = maxH + 2, p3z = pz;
+    const p2x = px + 2, p2y = maxH * EXAG + 2, p2z = pz;
+    const p3x = px + 2.3, p3y = maxH * EXAG + 2, p3z = pz;
     const pp = peakLeader.geo.attributes.position;
-    pp.setXYZ(0, px,  maxH, pz);
+    pp.setXYZ(0, px,  maxH * EXAG, pz);
     pp.setXYZ(1, p2x, p2y,  p2z);
     pp.setXYZ(2, p3x, p3y,  p3z);
     pp.needsUpdate = true;
@@ -1636,10 +1723,10 @@
       if (heights[i] < minH) { minH = heights[i]; minIdx = i; }
     }
     const lx = txCache[minIdx], lz = tzCache[minIdx];
-    const l2x = lx - 2, l2y = minH - 2, l2z = lz;
-    const l3x = lx - 2.3, l3y = minH - 2, l3z = lz;
+    const l2x = lx - 2, l2y = minH * EXAG - 2, l2z = lz;
+    const l3x = lx - 2.3, l3y = minH * EXAG - 2, l3z = lz;
     const lp = lowLeader.geo.attributes.position;
-    lp.setXYZ(0, lx,  minH, lz);
+    lp.setXYZ(0, lx,  minH * EXAG, lz);
     lp.setXYZ(1, l2x, l2y,  l2z);
     lp.setXYZ(2, l3x, l3y,  l3z);
     lp.needsUpdate = true;
@@ -1649,7 +1736,7 @@
     annDirData.low.v3.set(l3x, l3y, l3z);
 
     // Ground — left edge snapped to actual terrain Y at X=-11, Z=0
-    const groundEdgeY = heights[Math.round(SEG / 2) * (SEG + 1)];
+    const groundEdgeY = heights[Math.round(SEG / 2) * (SEG + 1)] * EXAG;
     const gp = groundLeader.geo.attributes.position;
     gp.setXYZ(0, -11,  groundEdgeY, 0);
     gp.setXYZ(1, -13,  groundEdgeY + 2, 0);
@@ -1797,6 +1884,29 @@
   const zoomLabel     = document.getElementById('zoom-label');
   syncFill(zoomSlider);
 
+  const exagSlider = document.getElementById('exag-slider');
+  const exagLabel  = document.getElementById('exag-label');
+  syncFill(exagSlider);
+  let exagDebounce = null;
+  exagSlider.addEventListener('input', () => {
+    EXAG = parseFloat(exagSlider.value);
+    exagLabel.textContent = `${EXAG.toFixed(1)}×`;
+    syncFill(exagSlider);
+    rebuildTerrain();
+    if (terrainShader) {
+      terrainShader.uniforms.uBaseY.value = BASE_Y * EXAG;
+      terrainShader.uniforms.uPeak.value  = ANIM_MAX * EXAG;
+      terrainShader.uniforms.uLow.value   = ANIM_MIN * EXAG;
+    }
+    if (base) base.position.y = BASE_Y * EXAG;
+    if (cwu) { cwu.uBaseY.value = BASE_Y * EXAG; fwu.uBaseY.value = BASE_Y * EXAG; }
+    clearTimeout(exagDebounce);
+    exagDebounce = setTimeout(() => {
+      lastBaseY = -Infinity;
+      applyBase(BASE_Y);
+    }, 400);
+  });
+
   let ANIM_MIN = -0.5, ANIM_MAX = 1.0;
   let BASE_INTRO = 1.0, BASE_TARGET = 0.5;
 
@@ -1814,8 +1924,8 @@
     BASE_INTRO  = pmax;
     BASE_TARGET = (pmin + pmax) / 2;
     if (terrainShader) {
-      terrainShader.uniforms.uPeak.value = pmax;
-      terrainShader.uniforms.uLow.value  = pmin;
+      terrainShader.uniforms.uPeak.value = pmax * EXAG;
+      terrainShader.uniforms.uLow.value  = pmin * EXAG;
     }
   }
 
@@ -1840,9 +1950,14 @@
     if (x === currentTile.x && y === currentTile.y && z === currentTile.z) return;
 
     siteSelect.classList.add('loading');
+    document.getElementById('tile-loader').classList.add('active');
     try {
       const data = await loadTerrarium(x, y, z);
       currentTile = { x, y, z };
+      const center = tileCenterLatLon(x, y, z);
+      anchorLat = center.lat; anchorLon = center.lon;
+      const matchedSite = Object.values(SITES).find(s => latLonToTile(s.lat, s.lon, z).x === x && latLonToTile(s.lat, s.lon, z).y === y);
+      updateGeoHud(center.lat, center.lon, z, matchedSite?.name || null);
       elevData = data;
       METERS_PER_UNIT = elevData.tileMeters / SIZE;
       UNIT_SCALE = METERS_PER_UNIT;
@@ -1870,7 +1985,29 @@
       alert('Failed to load tile: ' + err.message);
     } finally {
       siteSelect.classList.remove('loading');
+      document.getElementById('tile-loader').classList.remove('active');
     }
+  }
+
+  const geoHud = document.getElementById('geo-hud');
+  function setHud(name, lat, lon, z) {
+    geoHud.innerHTML = `<span class="hud-name">${name}</span><span class="hud-coords">${lat.toFixed(4)}, ${lon.toFixed(4)}&nbsp;&nbsp;Z${z}</span>`;
+  }
+  async function updateGeoHud(lat, lon, z, siteName) {
+    if (siteName) { setHud(siteName, lat, lon, z); return; }
+    setHud(`${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon, z);
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const d = await r.json();
+      const a = d.address || {};
+      const region = a.state || a.region || a.county || '';
+      const country = a.country || '';
+      const label = [region, country].filter(Boolean).join(', ');
+      if (label) setHud(label, lat, lon, z);
+    } catch { /* keep coords-only */ }
   }
 
   async function changeSite(lat, lon, z) {
@@ -1891,10 +2028,15 @@
     if (isCustom) { siteLatLon.focus(); return; }
     const s = SITES[siteSelect.value];
     CURRENT_SITE = siteSelect.value;
+    anchorLat = s.lat; anchorLon = s.lon;
     zoomSlider.value = s.z;
     zoomLabel.textContent = s.z;
     syncFill(zoomSlider);
     changeSite(s.lat, s.lon, s.z);
+    if (window.innerWidth <= 768) {
+      ctrlPanel.classList.add('hidden');
+      ctrlToggle.classList.remove('active');
+    }
   });
 
   zoomSlider.addEventListener('input', () => {
@@ -1904,7 +2046,7 @@
   zoomSlider.addEventListener('change', () => {
     const newZ = parseInt(zoomSlider.value, 10);
     const site = getActiveSite();
-    const { lat, lon } = site ?? tileCenterLatLon(currentTile.x, currentTile.y, currentTile.z);
+    const { lat, lon } = site ?? { lat: anchorLat, lon: anchorLon };
     changeSite(lat, lon, newZ);
   });
 
@@ -2113,6 +2255,7 @@
   syncFill(zoomSlider);
   tuneTerrainRange();
   updatePanState();
+  updateGeoHud(initSite.lat, initSite.lon, initSite.z, initSite.name);
 
   const offsetSlider = document.getElementById('offset-slider');
   const offsetLabel  = document.getElementById('offset-label');
@@ -2300,6 +2443,10 @@
 
   const ctrlToggle = document.getElementById('ctrl-toggle');
   const ctrlPanel  = document.getElementById('ctrl-panel');
+  if (window.innerWidth <= 768) {
+    ctrlPanel.classList.add('hidden');
+    ctrlToggle.classList.remove('active');
+  }
   ctrlToggle.addEventListener('click', () => {
     const open = ctrlPanel.classList.toggle('hidden');
     ctrlToggle.classList.toggle('active', !open);
