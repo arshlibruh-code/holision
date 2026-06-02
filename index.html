@@ -66,7 +66,7 @@
       position:fixed; bottom:10px; right:10px;
       display:flex; gap:6px; align-items:center;
       pointer-events:all;
-      z-index:50;
+      z-index:65;
     }
     .util-btn {
       font-size:12px; color:rgba(255,255,255,0.75);
@@ -277,6 +277,15 @@
     }
     .ann-lbl { font-family:'Share Tech', sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
     .ann-val { font-family:'Share Tech Mono', monospace; margin-left:5px; letter-spacing:-0.03em; }
+    .dir-label {
+      font-family:'Share Tech', sans-serif; font-weight:700; font-size:11px;
+      letter-spacing:0.1em; text-transform:uppercase;
+      padding:2px 6px; border:1px solid rgba(255,255,255,0.45);
+      color:rgba(255,255,255,0.7); background:rgba(0,0,0,0.12);
+      backdrop-filter:blur(6px); pointer-events:none;
+      transition:opacity 0.2s cubic-bezier(0,0,0.2,1);
+    }
+    .dir-label.north { border-color:rgba(8,155,223,0.8); color:rgba(90,200,255,0.9); }
     .contour-label {
       position: absolute;
       left: 0; top: 50%;
@@ -367,7 +376,33 @@
       }
     }
     @media (max-width: 768px) and (max-height: 500px) { .fp { max-height: 80vh; } }
+
+    .export-sheet {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      z-index: 60;
+      transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .export-sheet.hidden { transform: translateY(100%); }
+    .export-fp {
+      border-radius: 14px 14px 0 0;
+      width: 100%; box-sizing: border-box;
+      max-width: 480px; margin: 0 auto;
+    }
+    .export-opt {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 10px 12px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.75); cursor: pointer;
+      font-family: 'Share Tech', sans-serif; font-size: 12px;
+      letter-spacing: 0.04em; text-align: left;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .export-opt:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+    .export-opt svg { flex-shrink: 0; opacity: 0.6; }
+    .export-opt-name { font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.85); }
+    .export-opt-desc { font-size: 10px; color: rgba(255,255,255,0.3); margin-left: auto; letter-spacing: 0.05em; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script type="importmap">
   {
     "imports": {
@@ -389,6 +424,16 @@
   </div>
 </div>
 
+<div id="export-sheet" class="export-sheet hidden">
+  <div class="fp export-fp">
+    <div class="grp">
+      <button id="export-png" class="export-opt"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M6 11l6 6 6-6M3 21h18"/></svg><span class="export-opt-name">PNG</span><span class="export-opt-desc">Screenshot</span></button>
+      <button id="export-dxf" class="export-opt"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M6 11l6 6 6-6M3 21h18"/></svg><span class="export-opt-name">DXF</span><span class="export-opt-desc">Contours — Blender / AutoCAD</span></button>
+      <button id="export-geojson" class="export-opt"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M6 11l6 6 6-6M3 21h18"/></svg><span class="export-opt-name">GeoJSON</span><span class="export-opt-desc">Contours — Mapbox / QGIS</span></button>
+    </div>
+  </div>
+</div>
+
 <div id="tile-loader">
   <div class="lb"></div>
   <div class="lb"></div>
@@ -403,6 +448,7 @@
 <div class="util-strip">
   <button id="anim-btn" class="util-btn" title="animate base Y">▶</button>
   <button id="spin-btn" class="util-btn" title="auto rotate">⟳</button>
+  <button id="export-btn" class="ctrl-btn">Export</button>
   <button class="ctrl-btn active" id="ctrl-toggle">Controls</button>
 </div>
 
@@ -583,7 +629,7 @@
   labelRenderer.domElement.style.pointerEvents = 'none';
   document.body.appendChild(labelRenderer.domElement);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(devicePixelRatio);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1474,6 +1520,19 @@
   scene.add(groundLeader.line);
   scene.add(groundAnn.obj);
 
+  function makeDirLabel(letter, cls = '') {
+    const div = document.createElement('div');
+    div.className = 'dir-label' + (cls ? ' ' + cls : '');
+    div.textContent = letter;
+    const obj = new CSS2DObject(div);
+    scene.add(obj);
+    return obj;
+  }
+  const dirN = makeDirLabel('N', 'north');
+  const dirS = makeDirLabel('S');
+  const dirE = makeDirLabel('E');
+  const dirW = makeDirLabel('W');
+
   cutAnn = makeCSS2DLabel('Cut  0.0 m³', 'ann-label-top');
   cutAnn.div.style.opacity = '0';
   fillAnn = makeCSS2DLabel('Fill  0.0 m³', 'ann-label-bottom');
@@ -1746,6 +1805,12 @@
     groundAnn.lbl.textContent = 'Actual Surface'; groundAnn.val.textContent = '';
     annDirData.ground.v2.set(-13, groundEdgeY + 2, 0);
     annDirData.ground.v3.set(-13.3, groundEdgeY + 2, 0);
+
+    const ey = baseY * EXAG;
+    dirN.position.set(  0, ey, -11.8);
+    dirS.position.set(  0, ey,  11.8);
+    dirE.position.set( 11.8, ey,  0);
+    dirW.position.set(-11.8, ey,  0);
   }
 
   updateAnnotations(BASE_Y);
@@ -2447,9 +2512,141 @@
     ctrlPanel.classList.add('hidden');
     ctrlToggle.classList.remove('active');
   }
-  ctrlToggle.addEventListener('click', () => {
+  ctrlToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (window.innerWidth <= 768 && !exportSheet.classList.contains('hidden')) {
+      exportSheet.classList.add('hidden'); exportBtn.classList.remove('active');
+    }
     const open = ctrlPanel.classList.toggle('hidden');
     ctrlToggle.classList.toggle('active', !open);
+  });
+
+  const exportSheet = document.getElementById('export-sheet');
+  const exportBtn = document.getElementById('export-btn');
+  exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (window.innerWidth <= 768 && !ctrlPanel.classList.contains('hidden')) {
+      ctrlPanel.classList.add('hidden'); ctrlToggle.classList.remove('active');
+    }
+    const open = exportSheet.classList.toggle('hidden');
+    exportBtn.classList.toggle('active', !open);
+  });
+  exportSheet.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => {
+    if (!exportSheet.classList.contains('hidden')) {
+      exportSheet.classList.add('hidden');
+      exportBtn.classList.remove('active');
+    }
+  });
+
+  function siteName() {
+    return (SITES[CURRENT_SITE]?.name ?? `${anchorLat.toFixed(4)},${anchorLon.toFixed(4)}`).replace(/[^a-z0-9]/gi, '-').toLowerCase();
+  }
+
+  function sceneToLatLon(sx, sz) {
+    const R = 6371000;
+    const metersE =  sx * UNIT_SCALE;
+    const metersN = -sz * UNIT_SCALE;
+    const dLat = (metersN / R) * (180 / Math.PI);
+    const dLon = (metersE / (R * Math.cos(anchorLat * Math.PI / 180))) * (180 / Math.PI);
+    return [+(anchorLon + dLon).toFixed(6), +(anchorLat + dLat).toFixed(6)];
+  }
+
+  function buildGeoJSON() {
+    const features = [];
+    function addLayer(geo, layer) {
+      const pos = geo.attributes.position;
+      if (!pos || pos.count < 2) return;
+      const coords = [];
+      for (let i = 0; i + 1 < pos.count; i += 2)
+        coords.push([sceneToLatLon(pos.getX(i), pos.getZ(i)), sceneToLatLon(pos.getX(i+1), pos.getZ(i+1))]);
+      if (!coords.length) return;
+      features.push({ type: 'Feature', properties: { layer }, geometry: { type: 'MultiLineString', coordinates: coords } });
+    }
+    addLayer(ghostMinorGeo,    'contour-minor');
+    addLayer(ghostMajorGeo,    'contour-major');
+    addLayer(ghostFillMinorGeo,'contour-fill-minor');
+    addLayer(ghostFillMajorGeo,'contour-fill-major');
+    addLayer(contourGeo,       'cut-boundary');
+    return JSON.stringify({ type: 'FeatureCollection', properties: { site: SITES[CURRENT_SITE]?.name ?? null, lat: anchorLat, lon: anchorLon, zoom: currentTile.z, base_m: +(BASE_Y * UNIT_SCALE).toFixed(2) }, features });
+  }
+
+  function triggerDownload(content, filename, mime) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+    a.download = filename; a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function setExportState(btn, label) {
+    const orig = btn.querySelector('.export-opt-name').textContent;
+    btn.querySelector('.export-opt-name').textContent = label;
+    btn.disabled = true;
+    return () => { btn.querySelector('.export-opt-name').textContent = orig; btn.disabled = false; };
+  }
+
+  function buildDXF() {
+    const out = [];
+    out.push('0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n0\nENDSEC');
+    out.push('0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n5');
+    for (const [name, color] of [
+      ['CONTOUR-MINOR',      7],
+      ['CONTOUR-MAJOR',      7],
+      ['CONTOUR-FILL-MINOR', 3],
+      ['CONTOUR-FILL-MAJOR', 3],
+      ['CUT-BOUNDARY',       1],
+    ]) out.push(`0\nLAYER\n2\n${name}\n70\n0\n62\n${color}\n6\nCONTINUOUS`);
+    out.push('0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES');
+
+    function writeSegs(geo, layer) {
+      const pos = geo.attributes.position;
+      if (!pos || pos.count < 2) return;
+      for (let i = 0; i + 1 < pos.count; i += 2) {
+        const x1 = (pos.getX(i)   * UNIT_SCALE).toFixed(3);
+        const y1 = (-pos.getZ(i)  * UNIT_SCALE).toFixed(3);
+        const z1 = ((pos.getY(i)  / EXAG) * UNIT_SCALE).toFixed(3);
+        const x2 = (pos.getX(i+1) * UNIT_SCALE).toFixed(3);
+        const y2 = (-pos.getZ(i+1)* UNIT_SCALE).toFixed(3);
+        const z2 = ((pos.getY(i+1)/ EXAG) * UNIT_SCALE).toFixed(3);
+        out.push(`0\nLINE\n8\n${layer}\n10\n${x1}\n20\n${y1}\n30\n${z1}\n11\n${x2}\n21\n${y2}\n31\n${z2}`);
+      }
+    }
+    writeSegs(ghostMinorGeo,    'CONTOUR-MINOR');
+    writeSegs(ghostMajorGeo,    'CONTOUR-MAJOR');
+    writeSegs(ghostFillMinorGeo,'CONTOUR-FILL-MINOR');
+    writeSegs(ghostFillMajorGeo,'CONTOUR-FILL-MAJOR');
+    writeSegs(contourGeo,       'CUT-BOUNDARY');
+    out.push('0\nENDSEC\n0\nEOF');
+    return out.join('\n');
+  }
+
+  document.getElementById('export-dxf').addEventListener('click', function() {
+    const restore = setExportState(this, 'Exporting…');
+    triggerDownload(buildDXF(), `holision-${siteName()}.dxf`, 'application/dxf');
+    this.querySelector('.export-opt-name').textContent = 'Exported ✓';
+    setTimeout(() => { restore(); exportSheet.classList.add('hidden'); exportBtn.classList.remove('active'); }, 1500);
+  });
+
+  document.getElementById('export-geojson').addEventListener('click', function() {
+    const restore = setExportState(this, 'Exporting…');
+    triggerDownload(buildGeoJSON(), `holision-${siteName()}.geojson`, 'application/geo+json');
+    this.querySelector('.export-opt-name').textContent = 'Exported ✓';
+    setTimeout(() => { restore(); exportSheet.classList.add('hidden'); exportBtn.classList.remove('active'); }, 1500);
+  });
+
+  document.getElementById('export-png').addEventListener('click', async function() {
+    const restore = setExportState(this, 'Capturing…');
+    const hide = ['.util-strip', '.credit', '#ctrl-panel', '#tile-loader', '#intro-overlay', '#export-sheet']
+      .map(s => document.querySelector(s)).filter(Boolean);
+    hide.forEach(el => el.style.visibility = 'hidden');
+    renderer.render(scene, camera);
+    try {
+      const canvas = await html2canvas(document.body, { backgroundColor: '#08080c', scale: window.devicePixelRatio, useCORS: true, logging: false });
+      triggerDownload(await new Promise(r => canvas.toBlob(r, 'image/png')), `holision-${siteName()}.png`, 'image/png');
+      this.querySelector('.export-opt-name').textContent = 'Saved ✓';
+      setTimeout(() => { restore(); exportSheet.classList.add('hidden'); exportBtn.classList.remove('active'); }, 1500);
+    } catch { restore(); }
+    finally { hide.forEach(el => el.style.visibility = ''); }
   });
 
   window.addEventListener('resize', () => {
