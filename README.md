@@ -1,6 +1,6 @@
 # holision
 
-![holision](holision-thumb.png)
+![holision](holision-thumb.webp)
 
 Holographic terrain cut/fill viz — Three.js + custom shaders.
 
