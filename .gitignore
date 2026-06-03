@@ -3,3 +3,5 @@ shader-explainer.html
 *.mp4
 .wrangler/
 assets/
+192.168.31.185-key.pem
+192.168.31.185.pem
