@@ -713,7 +713,7 @@
     'death-valley':  { lat: 36.5054, lon:-116.9347, z: 9, name: 'Death Valley' },
     'hvannadalshnjukur': { lat: 64.0163, lon: -16.6806, z: 13, name: 'Hvannadalshnjúkur' },
   };
-  let CURRENT_SITE = 'bingham';
+  let CURRENT_SITE = 'grand-canyon';
 
   // ── Webcam / Live Depth pipeline ──
   let webcamActive = false;
@@ -811,7 +811,7 @@
   let EXAG = 1.0;
   let CUT_OFFSET = 0.0;
   let FILL_OFFSET = 0.0;
-  const TARGET_CUT_OFFSET = 10.0;
+  const TARGET_CUT_OFFSET = 5.0;
   let BASE_Y = 0.10;
   let showCut = true, showFill = true;
   function computeViewMode() {
@@ -2662,7 +2662,7 @@
 
   // ── Intro sequencer ──
   const INTRO_START  = new THREE.Vector3(0, 90, 130);
-  const INTRO_END    = new THREE.Vector3(0, 22, 40);
+  const INTRO_END    = new THREE.Vector3(0, 24, 40);
 
   const SEQ = [
     { name: 'camera',   start:    0, dur: 3500 },
@@ -2726,7 +2726,7 @@
 
         if (s.name === 'camera') {
           const pos = new THREE.Vector3().lerpVectors(INTRO_START, INTRO_END, e);
-          const angle = e * Math.PI * 2;
+          const angle = e * Math.PI * 2.7;
           const rel = pos.clone().sub(controls.target);
           const cs = Math.cos(angle), sn = Math.sin(angle);
           camera.position.set(
