@@ -521,6 +521,7 @@
         <button data-mode="cut"     class="tog active" style="grid-column:span 2">Cut</button>
         <button data-mode="fill"    class="tog active" style="grid-column:span 2">Fill</button>
         <button data-mode="sat"     class="tog active" style="grid-column:span 2">Satellite</button>
+        <button data-mode="invert" id="invert-btn" class="tog" style="grid-column:span 2; display:none">Invert Depth</button>
         <button data-mode="ann"     class="tog active" style="grid-column:span 2">Annotations</button>
         <button data-mode="lines"   class="tog active" style="grid-column:span 2">Contours</button>
         <button data-mode="contour" class="tog active" style="grid-column:span 2">Contour Labels</button>
@@ -643,14 +644,14 @@
 
   const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
   camera.position.set(0, 22, 40);
-  camera.lookAt(0, 3, 0);
+  camera.lookAt(0, -3, 0);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
   controls.autoRotate = false;
   controls.autoRotateSpeed = 2.0;
-  controls.target.set(0, 3, 0);
+  controls.target.set(0, -3, 0);
   controls.minDistance = 8;
   controls.maxDistance = 85;
 
@@ -726,7 +727,7 @@
   let webcamBaseSnapped = false;
   let webcamPrevShowSat = null;
   const DEPTH_HEIGHT_SCALE = 2.0;
-  const DEPTH_INVERT = false;
+  let DEPTH_INVERT = false;
   const CAM_FLIP_X = false; // flip depth + texture horizontally
   const CAM_FLIP_Y = false; // flip depth + texture vertically
 
@@ -774,7 +775,7 @@
     const blob = await resp.blob();
     const blobUrl = URL.createObjectURL(blob);
     return new Promise((resolve, reject) => {
-      new THREE.TextureLoader().load(blobUrl, tex => { URL.revokeObjectURL(blobUrl); resolve(tex); }, undefined, err => { URL.revokeObjectURL(blobUrl); reject(err); });
+      new THREE.TextureLoader().load(blobUrl, tex => { URL.revokeObjectURL(blobUrl); tex.flipY = false; resolve(tex); }, undefined, err => { URL.revokeObjectURL(blobUrl); reject(err); });
     });
   }
 
@@ -811,7 +812,7 @@
   let EXAG = 1.0;
   let CUT_OFFSET = 0.0;
   let FILL_OFFSET = 0.0;
-  const TARGET_CUT_OFFSET = 5.0;
+  const TARGET_CUT_OFFSET = 13.0;
   let BASE_Y = 0.10;
   let showCut = true, showFill = true;
   function computeViewMode() {
@@ -2169,15 +2170,21 @@
     webcamVideo.srcObject = webcamStream;
     await webcamVideo.play();
 
-    webcamCanvas = new OffscreenCanvas(webcamVideo.videoWidth, webcamVideo.videoHeight);
+    const seedSize = Math.min(webcamVideo.videoWidth, webcamVideo.videoHeight);
+    webcamCanvas = new OffscreenCanvas(seedSize, seedSize);
     webcamCtx = webcamCanvas.getContext('2d', { willReadFrequently: true });
-    // Draw first frame so CanvasTexture has content
-    webcamCtx.drawImage(webcamVideo, 0, 0, webcamVideo.videoWidth, webcamVideo.videoHeight);
+    // Seed first frame: center-square crop + horizontal mirror (selfie) so texture and depth share identical pixels
+    webcamCtx.save();
+    webcamCtx.translate(seedSize, 0);
+    webcamCtx.scale(-1, 1);
+    webcamCtx.drawImage(webcamVideo, (webcamVideo.videoWidth - seedSize) >> 1, (webcamVideo.videoHeight - seedSize) >> 1, seedSize, seedSize, 0, 0, seedSize, seedSize);
+    webcamCtx.restore();
 
     webcamLastTile = { x: currentTile.x, y: currentTile.y, z: currentTile.z };
 
-    // CanvasTexture from same canvas depth reads from — zero orientation ambiguity
+    // flipY off so CanvasTexture matches getImageData's top-left origin (same as the depth sampler)
     webcamTex = new THREE.CanvasTexture(webcamCanvas);
+    webcamTex.flipY = false;
     webcamTex.colorSpace = THREE.SRGBColorSpace;
     if (terrainShader) {
       terrainShader.uniforms.uSatMap.value = webcamTex;
@@ -2200,6 +2207,10 @@
       satBtn.classList.add('active');
     }
     showSat = true;
+
+    // reveal depth-invert toggle (webcam only)
+    const invBtn = document.getElementById('invert-btn');
+    if (invBtn) invBtn.style.display = '';
 
     webcamBaseSnapped = false;
     webcamActive = true;
@@ -2260,6 +2271,11 @@
       }
     }
 
+    // hide + reset depth-invert toggle
+    const invBtn = document.getElementById('invert-btn');
+    if (invBtn) { invBtn.style.display = 'none'; invBtn.classList.remove('active'); }
+    DEPTH_INVERT = false;
+
     btn.classList.remove('active');
   }
 
@@ -2269,15 +2285,18 @@
     const vh = webcamVideo.videoHeight;
     if (vw === 0 || vh === 0) return;
 
-    webcamCanvas.width = vw;
-    webcamCanvas.height = vh;
-    webcamCtx.drawImage(webcamVideo, 0, 0, vw, vh);
+    const size = Math.min(vw, vh);
+    webcamCanvas.width = size;
+    webcamCanvas.height = size;
+    // center-square crop + horizontal mirror — texture and depth now read the same square pixels
+    webcamCtx.save();
+    webcamCtx.translate(size, 0);
+    webcamCtx.scale(-1, 1);
+    webcamCtx.drawImage(webcamVideo, (vw - size) >> 1, (vh - size) >> 1, size, size, 0, 0, size, size);
+    webcamCtx.restore();
     if (webcamTex) webcamTex.needsUpdate = true;
 
-    const size = Math.min(vw, vh);
-    const ox = (vw - size) >> 1;
-    const oy = (vh - size) >> 1;
-    const imgData = webcamCtx.getImageData(ox, oy, size, size);
+    const imgData = webcamCtx.getImageData(0, 0, size, size);
     const pixels = imgData.data;
 
     const w = SEG + 1;
@@ -2293,7 +2312,7 @@
       const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
       const h = (DEPTH_INVERT ? 1 - lum : lum) * DEPTH_HEIGHT_SCALE;
       heights[i] = h;
-      tPos.setY(i, h);
+      tPos.setY(i, h * EXAG);
     }
     tPos.needsUpdate = true;
     terrainGeo.computeVertexNormals();
@@ -2456,6 +2475,7 @@
         satRevealTarget = on ? 1.0 : 0.0;
         if (on && terrainShader && satLoaded) terrainShader.uniforms.uHasSat.value = 1;
       }
+      if (mode === 'invert') DEPTH_INVERT = on;
       if (mode === 'ann') {
         showAnns = on; annFadeTgt = on ? 1 : 0;
         const op = on ? '1' : '0';
@@ -2736,7 +2756,7 @@
           );
           camera.lookAt(controls.target);
         }
-        if (s.name === 'cut') { CUT_OFFSET = TARGET_CUT_OFFSET * eio(t); cwu.uCutOffset.value = CUT_OFFSET; fwu.uCutOffset.value = CUT_OFFSET; controls.target.y = 3 + CUT_OFFSET; camera.fov = 30 + 34 * eio(t); camera.updateProjectionMatrix(); dirty = true; }
+        if (s.name === 'cut') { CUT_OFFSET = TARGET_CUT_OFFSET * eio(t); cwu.uCutOffset.value = CUT_OFFSET; fwu.uCutOffset.value = CUT_OFFSET; controls.target.y = -3 + CUT_OFFSET; camera.fov = 30 + 34 * eio(t); camera.updateProjectionMatrix(); dirty = true; }
         if (s.name === 'base') { BASE_Y = BASE_INTRO + (BASE_TARGET - BASE_INTRO) * eio(t); heavyDirty = true; }
 
         if (t >= 1) {
