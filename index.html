@@ -2770,6 +2770,7 @@
 
       if (!seqFinished && seqDone.size >= SEQ.length) {
         seqFinished = true;
+        setTimeout(() => { controls.autoRotate = true; spinBtn.classList.add('active'); }, 400);
         setTimeout(() => {
           showSat = false;
           satRevealTarget = 0.0;
