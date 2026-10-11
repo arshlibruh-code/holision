@@ -103,6 +103,11 @@
     .fc-val.fv { color:rgba(90,200,255,0.8); }
 
     /* custom slider row */
+    .shape-seg { display:flex; gap:3px; flex:1; }
+    .shape-seg button { flex:1; height:24px; display:flex; align-items:center; justify-content:center; padding:0; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:2px; color:rgba(255,255,255,0.5); cursor:pointer; transition:color .15s, border-color .15s, background .15s; }
+    .shape-seg button:hover { color:rgba(255,255,255,0.85); border-color:rgba(255,255,255,0.25); }
+    .shape-seg button.active { color:#fff; background:rgba(8,60,100,0.6); border-color:#089BDF; }
+    .shape-seg svg { width:14px; height:14px; overflow:visible; }
     #spin-row.off { opacity: 0.35; pointer-events: none; }
     .csr {
       position:relative; height:28px;
@@ -494,7 +499,7 @@
         </button>
       </div>
       <div class="csr" id="site-custom-row">
-        <span class="csr-label">Lat, Lon</span>
+        <span class="csr-label" style="flex:0 0 auto; white-space:nowrap; margin-right:8px;">Lat, Lon</span>
         <input type="text" id="site-latlon" placeholder="40.52, -112.15" class="latlon-input">
       </div>
       <div class="csr">
@@ -509,6 +514,10 @@
           <option value="mapterhorn">Mapterhorn (lidar to 0.4 m)</option>
           <option value="aws">AWS Terrain Tiles (30 m)</option>
         </select>
+      </div>
+      <div class="fp-row" style="align-items:center;">
+        <div class="fc-lbl">Shape</div>
+        <div class="shape-seg" id="shape-seg"></div>
       </div>
       <div class="csr">
         <div class="csr-fill"></div>
@@ -985,10 +994,12 @@
   }
 
   // pre-build triangle adjacency (static — terrain topology never changes)
-  const srcIdx = terrainGeo.index.array;
-  const numTris = srcIdx.length / 3;
-  const triNeighbors = Array.from({ length: numTris }, () => []);
-  {
+  const fullIdx = terrainGeo.index.array;
+  let srcIdx = fullIdx;
+  let numTris = srcIdx.length / 3;
+  let triNeighbors = [];
+  function buildAdjacency() {
+    triNeighbors = Array.from({ length: numTris }, () => []);
     const edgeMap = new Map();
     for (let t = 0; t < numTris; t++) {
       const a = srcIdx[t*3], b = srcIdx[t*3+1], c = srcIdx[t*3+2];
@@ -1002,6 +1013,87 @@
           edgeMap.set(k, t);
         }
       }
+    }
+  }
+  buildAdjacency();
+
+  // Terrain shapes. Each is a star-shaped outline around the centre, in units of half the tile,
+  // so one radius-per-angle function clips the terrain, the base plane and the volumes alike.
+  const polyStar = (n, rOut, rIn, rot = -Math.PI / 2) => Array.from({ length: n * 2 }, (_, k) => {
+    const a = rot + k * Math.PI / n, r = k % 2 ? rIn : rOut; return [r * Math.cos(a), r * Math.sin(a)]; });
+  const polyReg = (n, r, rot) => Array.from({ length: n }, (_, k) => {
+    const a = rot + k * 2 * Math.PI / n; return [r * Math.cos(a), r * Math.sin(a)]; });
+  const SHAPES = {
+    square:   { name: 'Square',   poly: [[1, 1], [-1, 1], [-1, -1], [1, -1]] },
+    circle:   { name: 'Circle',   poly: null },
+    hexagon:  { name: 'Hexagon',  poly: polyReg(6, 1, 0) },
+    octagon:  { name: 'Octagon',  poly: polyReg(8, 1 / Math.cos(Math.PI / 8), Math.PI / 8) },
+    triangle: { name: 'Triangle', poly: polyReg(3, 1, -Math.PI / 2) },
+    diamond:  { name: 'Diamond',  poly: polyReg(4, 1, 0) },
+    star:     { name: 'Star',     poly: polyStar(5, 1, 0.45) },
+    cross:    { name: 'Cross',    poly: [[0.36,1],[-0.36,1],[-0.36,0.36],[-1,0.36],[-1,-0.36],[-0.36,-0.36],[-0.36,-1],[0.36,-1],[0.36,-0.36],[1,-0.36],[1,0.36],[0.36,0.36]] },
+  };
+  let SHAPE = 'square';
+  // distance from the centre to the outline along angle a (ray against each edge)
+  function shapeRadius(shape, a) {
+    const poly = SHAPES[shape].poly;
+    if (!poly) return 1;
+    const dx = Math.cos(a), dz = Math.sin(a);
+    let best = Infinity;
+    for (let k = 0; k < poly.length; k++) {
+      const [x1, z1] = poly[k], [x2, z2] = poly[(k + 1) % poly.length];
+      const ex = x2 - x1, ez = z2 - z1, den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-12) continue;
+      const t = (x1 * ez - z1 * ex) / den, u = (x1 * dz - z1 * dx) / den;
+      if (t > 0 && u >= -1e-9 && u <= 1 + 1e-9) best = Math.min(best, t);
+    }
+    return best === Infinity ? 1 : best;
+  }
+  const gridX = Float32Array.from(txCache), gridZ = Float32Array.from(tzCache);
+  const vertIn = new Uint8Array(tPos.count).fill(1);
+  let groundIdx = Math.round(SEG / 2) * (SEG + 1);
+  function applyShapeTopology(shape) {
+    const H = SIZE / 2, n = tPos.count, rho = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      tPos.setX(i, gridX[i]); tPos.setZ(i, gridZ[i]);
+      const r = Math.hypot(gridX[i], gridZ[i]);
+      rho[i] = r < 1e-9 ? 0 : r / (H * shapeRadius(shape, Math.atan2(gridZ[i], gridX[i])));
+    }
+    // the first ring of grid points outside the outline snaps onto it, so the edge is smooth
+    vertIn.fill(0);
+    for (let i = 0; i < n; i++) if (rho[i] <= 1 + 1e-6) vertIn[i] = 1;
+    const snap = new Uint8Array(n);
+    for (let t = 0; t < fullIdx.length; t += 3) {
+      const a = fullIdx[t], b = fullIdx[t + 1], c = fullIdx[t + 2];
+      if (vertIn[a] || vertIn[b] || vertIn[c]) for (const v of [a, b, c]) if (!vertIn[v]) snap[v] = 1;
+    }
+    for (let i = 0; i < n; i++) if (snap[i]) {
+      tPos.setX(i, gridX[i] / rho[i]); tPos.setZ(i, gridZ[i] / rho[i]); vertIn[i] = 1;
+    }
+    const kept = [];
+    for (let t = 0; t < fullIdx.length; t += 3) {
+      const a = fullIdx[t], b = fullIdx[t + 1], c = fullIdx[t + 2];
+      if (vertIn[a] && vertIn[b] && vertIn[c]) kept.push(a, b, c);
+    }
+    srcIdx = shape === 'square' ? fullIdx : Uint32Array.from(kept);
+    numTris = srcIdx.length / 3;
+    terrainGeo.setIndex(new THREE.BufferAttribute(srcIdx, 1));
+    buildAdjacency();
+    for (let i = 0; i < n; i++) { txCache[i] = tPos.getX(i); tzCache[i] = tPos.getZ(i); }
+    // ground label: the in-shape point furthest left along the middle row
+    let gx = Infinity;
+    for (let i = 0; i < n; i++) if (vertIn[i] && Math.abs(tzCache[i]) < SIZE / SEG && txCache[i] < gx) { gx = txCache[i]; groundIdx = i; }
+    // base plane takes the same outline
+    if (base) {
+      let geo;
+      if (shape === 'square') { geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG); }
+      else {
+        const pts = [];
+        for (let k = 0; k < 256; k++) { const a = k / 256 * Math.PI * 2, r = H * shapeRadius(shape, a); pts.push(new THREE.Vector2(r * Math.cos(a), -r * Math.sin(a))); }
+        geo = new THREE.ShapeGeometry(new THREE.Shape(pts));
+      }
+      geo.rotateX(-Math.PI / 2);
+      base.geometry.dispose(); base.geometry = geo;
     }
   }
 
@@ -1821,9 +1913,10 @@
 
   function updateAnnotations(baseY) {
     // Base — anchor: right edge midpoint of base plane
-    const b1x = 11, b1y = baseY * EXAG, b1z = 0;
-    const b2x = 13, b2y = baseY * EXAG + 2, b2z = 0;
-    const b3x = 13.3, b3y = baseY * EXAG + 2, b3z = 0;
+    const bx = SIZE / 2 * shapeRadius(SHAPE, 0);
+    const b1x = bx, b1y = baseY * EXAG, b1z = 0;
+    const b2x = bx + 2, b2y = baseY * EXAG + 2, b2z = 0;
+    const b3x = bx + 2.3, b3y = baseY * EXAG + 2, b3z = 0;
     const bp = baseLeader.geo.attributes.position;
     bp.setXYZ(0, b1x, b1y, b1z);
     bp.setXYZ(1, b2x, b2y, b2z);
@@ -1837,7 +1930,7 @@
     // Peak — anchor: highest terrain vertex
     let maxH = -Infinity, maxIdx = 0;
     for (let i = 0; i < heights.length; i++) {
-      if (heights[i] > maxH) { maxH = heights[i]; maxIdx = i; }
+      if (vertIn[i] && heights[i] > maxH) { maxH = heights[i]; maxIdx = i; }
     }
     const px = txCache[maxIdx], pz = tzCache[maxIdx];
     const p2x = px + 2, p2y = maxH * EXAG + 2, p2z = pz;
@@ -1848,14 +1941,14 @@
     pp.setXYZ(2, p3x, p3y,  p3z);
     pp.needsUpdate = true;
     peakAnn.obj.position.set(p3x, p3y, p3z);
-    peakAnn.lbl.textContent = 'Peak'; peakAnn.val.textContent = `${(webcamActive ? maxH * UNIT_SCALE : elevData.max).toFixed(1)} m`;
+    peakAnn.lbl.textContent = 'Peak'; peakAnn.val.textContent = `${(webcamActive || SHAPE !== 'square' ? maxH * UNIT_SCALE : elevData.max).toFixed(1)} m`;
     annDirData.peak.v2.set(p2x, p2y, p2z);
     annDirData.peak.v3.set(p3x, p3y, p3z);
 
     // Low — anchor: lowest terrain vertex
     let minH = Infinity, minIdx = 0;
     for (let i = 0; i < heights.length; i++) {
-      if (heights[i] < minH) { minH = heights[i]; minIdx = i; }
+      if (vertIn[i] && heights[i] < minH) { minH = heights[i]; minIdx = i; }
     }
     const lx = txCache[minIdx], lz = tzCache[minIdx];
     const l2x = lx - 2, l2y = minH * EXAG - 2, l2z = lz;
@@ -1866,21 +1959,21 @@
     lp.setXYZ(2, l3x, l3y,  l3z);
     lp.needsUpdate = true;
     lowAnn.obj.position.set(l3x, l3y, l3z);
-    lowAnn.lbl.textContent = 'Low'; lowAnn.val.textContent = `${(webcamActive ? minH * UNIT_SCALE : elevData.min).toFixed(1)} m`;
+    lowAnn.lbl.textContent = 'Low'; lowAnn.val.textContent = `${(webcamActive || SHAPE !== 'square' ? minH * UNIT_SCALE : elevData.min).toFixed(1)} m`;
     annDirData.low.v2.set(l2x, l2y, l2z);
     annDirData.low.v3.set(l3x, l3y, l3z);
 
     // Ground — left edge snapped to actual terrain Y at X=-11, Z=0
-    const groundEdgeY = heights[Math.round(SEG / 2) * (SEG + 1)] * EXAG;
+    const groundEdgeY = heights[groundIdx] * EXAG, gx = txCache[groundIdx], gz = tzCache[groundIdx];
     const gp = groundLeader.geo.attributes.position;
-    gp.setXYZ(0, -11,  groundEdgeY, 0);
-    gp.setXYZ(1, -13,  groundEdgeY + 2, 0);
-    gp.setXYZ(2, -13.3, groundEdgeY + 2, 0);
+    gp.setXYZ(0, gx,  groundEdgeY, gz);
+    gp.setXYZ(1, gx - 2,  groundEdgeY + 2, gz);
+    gp.setXYZ(2, gx - 2.3, groundEdgeY + 2, gz);
     gp.needsUpdate = true;
-    groundAnn.obj.position.set(-13.3, groundEdgeY + 2, 0);
+    groundAnn.obj.position.set(gx - 2.3, groundEdgeY + 2, gz);
     groundAnn.lbl.textContent = 'Actual Surface'; groundAnn.val.textContent = '';
-    annDirData.ground.v2.set(-13, groundEdgeY + 2, 0);
-    annDirData.ground.v3.set(-13.3, groundEdgeY + 2, 0);
+    annDirData.ground.v2.set(gx - 2, groundEdgeY + 2, gz);
+    annDirData.ground.v3.set(gx - 2.3, groundEdgeY + 2, gz);
 
     const ey = baseY * EXAG;
     dirN.position.set(  0, ey, -11.8);
@@ -2019,6 +2112,30 @@
   }
 
   const siteSelect    = document.getElementById('site-select');
+  // Shape control: one outlined button per shape, drawn from the same outline the terrain uses
+  const shapeSeg = document.getElementById('shape-seg');
+  for (const [key, sh] of Object.entries(SHAPES)) {
+    const btn = document.createElement('button');
+    btn.title = sh.name; btn.dataset.shape = key;
+    const outline = sh.poly
+      ? `<polygon points="${sh.poly.map(([x, z]) => `${x.toFixed(3)},${z.toFixed(3)}`).join(' ')}"/>`
+      : '<circle r="1"/>';
+    btn.innerHTML = `<svg viewBox="-1.2 -1.2 2.4 2.4" fill="none" stroke="currentColor" stroke-width="0.16" stroke-linejoin="round">${outline}</svg>`;
+    btn.classList.toggle('active', key === SHAPE);
+    btn.addEventListener('click', () => {
+      if (key === SHAPE) return;
+      SHAPE = key;
+      shapeSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.shape === key));
+      applyShapeTopology(SHAPE);
+      rebuildTerrain();
+      tuneTerrainRange();
+      rigRetarget();
+      balanceStamp = '';
+      lastBaseY = -Infinity;
+      applyBase(BASE_Y);
+    });
+    shapeSeg.appendChild(btn);
+  }
   const demSelect     = document.getElementById('dem-select');
   const demCredit     = document.getElementById('dem-credit');
   demSelect.addEventListener('change', () => {
@@ -2064,6 +2181,7 @@
     const bs = document.getElementById('base-slider');
     let pmin = Infinity, pmax = -Infinity;
     for (let i = 0; i < heights.length; i++) {
+      if (!vertIn[i]) continue;
       if (heights[i] < pmin) pmin = heights[i];
       if (heights[i] > pmax) pmax = heights[i];
     }
