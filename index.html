@@ -688,6 +688,7 @@
   const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking, side: THREE.DoubleSide });
   let depthBuffer = new Uint8Array(dtW * dtH * 4);
   let depthReady = false;
+  let depthReading = false;
 
   // BasicDepthPacking stores (1 - fragCoordZ) in R — close = bright, far = dark
   function sampleSceneDepth(sx, sy) {
@@ -1049,43 +1050,72 @@
   const ghostFillMinorGeo = new THREE.BufferGeometry();
   const ghostFillMajorGeo = new THREE.BufferGeometry();
 
-  function computeGhostViz(baseY, interval = MINOR_INTERVAL) {
-    const minorVerts = [], majorVerts = [], candidates = [];
+  // Ghost contours at every interval between gMin and gMax, inside the cut region (above the
+  // base) or the fill region (below it). Each triangle is visited once and tested only against
+  // the levels its heights span, instead of every triangle against every level. Output is the
+  // same as before: grouped by level, triangle order within each level.
+  function computeLevelLines(baseY, interval, above, type) {
+    const candidates = [];
     let gMin = Infinity, gMax = -Infinity;
     for (let i = 0; i < tPos.count; i++) {
-      if (heights[i] > baseY) { gMin = Math.min(gMin, heights[i]); gMax = Math.max(gMax, heights[i]); }
+      const h = heights[i];
+      if (above ? h > baseY : h < baseY) { if (h < gMin) gMin = h; if (h > gMax) gMax = h; }
     }
     if (gMin === Infinity) return { minor: new Float32Array(0), major: new Float32Array(0), candidates };
     const majorInterval = interval * MAJOR_N;
     const startLevel = Math.ceil(gMin / interval) * interval;
-    for (let level = startLevel; level <= gMax + 1e-6; level += interval) {
-      const isMajor = Math.abs(Math.round(level/majorInterval)*majorInterval - level) < interval*0.01;
-      const target = isMajor ? majorVerts : minorVerts;
-      const levelCandidates = [];
-      for (let i = 0; i < srcIdx.length; i += 3) {
-        const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
-        if (!(heights[a] > baseY && heights[b] > baseY && heights[c] > baseY)) continue;
-        const ha = heights[a], hb = heights[b], hc = heights[c];
-        const pts = [];
-        for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
-          if ((hp < level) !== (hq < level)) {
-            const t = (level-hp)/(hq-hp);
-            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level*EXAG, tzCache[p]+t*(tzCache[q]-tzCache[p]));
-          }
-        }
-        if (pts.length === 6) {
-          target.push(...pts);
-          if (isMajor) {
-            const mx = (pts[0]+pts[3])/2, mz = (pts[2]+pts[5])/2;
-            let ok = true;
-            for (const c of levelCandidates) { const dx=mx-c[0],dz=mz-c[1]; if(dx*dx+dz*dz<2.25){ok=false;break;} }
-            if (ok) levelCandidates.push([mx, mz]);
-          }
+    const levels = [];
+    for (let level = startLevel; level <= gMax + 1e-6; level += interval) levels.push(level);
+    const L = levels.length;
+    const isMajor = levels.map(level => Math.abs(Math.round(level/majorInterval)*majorInterval - level) < interval*0.01);
+    const segs = Array.from({ length: L }, () => []);
+    const levelCandidates = Array.from({ length: L }, () => []);
+    const pts = new Float64Array(9);
+    let n = 0;
+    const cross = (p, q, hp, hq, level) => {
+      const t = (level-hp)/(hq-hp);
+      pts[n++] = txCache[p]+t*(txCache[q]-txCache[p]);
+      pts[n++] = level*EXAG;
+      pts[n++] = tzCache[p]+t*(tzCache[q]-tzCache[p]);
+    };
+    for (let i = 0; i < srcIdx.length; i += 3) {
+      const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
+      const ha = heights[a], hb = heights[b], hc = heights[c];
+      if (above ? !(ha > baseY && hb > baseY && hc > baseY) : !(ha < baseY && hb < baseY && hc < baseY)) continue;
+      // The levels this triangle can cross, padded by one each side; the exact edge test decides
+      const k0 = Math.max(0, Math.floor((Math.min(ha, hb, hc) - startLevel) / interval) - 1);
+      const k1 = Math.min(L - 1, Math.ceil((Math.max(ha, hb, hc) - startLevel) / interval) + 1);
+      for (let k = k0; k <= k1; k++) {
+        const level = levels[k];
+        n = 0;
+        if ((ha < level) !== (hb < level)) cross(a, b, ha, hb, level);
+        if ((hb < level) !== (hc < level)) cross(b, c, hb, hc, level);
+        if ((hc < level) !== (ha < level)) cross(c, a, hc, ha, level);
+        if (n !== 6) continue;
+        segs[k].push(pts[0], pts[1], pts[2], pts[3], pts[4], pts[5]);
+        if (isMajor[k]) {
+          const mx = (pts[0]+pts[3])/2, mz = (pts[2]+pts[5])/2;
+          const lc = levelCandidates[k];
+          let ok = true;
+          for (const cd of lc) { const dx=mx-cd[0],dz=mz-cd[1]; if(dx*dx+dz*dz<2.25){ok=false;break;} }
+          if (ok) lc.push([mx, mz]);
         }
       }
-      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level*EXAG, z:cz, level, type:'cut' });
     }
-    return { minor: new Float32Array(minorVerts), major: new Float32Array(majorVerts), candidates };
+    let minorLen = 0, majorLen = 0;
+    for (let k = 0; k < L; k++) { if (isMajor[k]) majorLen += segs[k].length; else minorLen += segs[k].length; }
+    const minor = new Float32Array(minorLen), major = new Float32Array(majorLen);
+    let mi = 0, ma = 0;
+    for (let k = 0; k < L; k++) {
+      if (isMajor[k]) { major.set(segs[k], ma); ma += segs[k].length; }
+      else            { minor.set(segs[k], mi); mi += segs[k].length; }
+      for (const [cx, cz] of levelCandidates[k]) candidates.push({ x:cx, y:levels[k]*EXAG, z:cz, level: levels[k], type });
+    }
+    return { minor, major, candidates };
+  }
+
+  function computeGhostViz(baseY, interval = MINOR_INTERVAL) {
+    return computeLevelLines(baseY, interval, true, 'cut');
   }
 
   function rebuildGhostViz(baseY) {
@@ -1096,42 +1126,7 @@
   }
 
   function computeFillGhostViz(baseY, interval = MINOR_INTERVAL) {
-    const minorVerts = [], majorVerts = [], candidates = [];
-    let gMin = Infinity, gMax = -Infinity;
-    for (let i = 0; i < tPos.count; i++) {
-      if (heights[i] < baseY) { gMin = Math.min(gMin, heights[i]); gMax = Math.max(gMax, heights[i]); }
-    }
-    if (gMin === Infinity) return { minor: new Float32Array(0), major: new Float32Array(0), candidates };
-    const majorInterval = interval * MAJOR_N;
-    const startLevel = Math.ceil(gMin / interval) * interval;
-    for (let level = startLevel; level <= gMax + 1e-6; level += interval) {
-      const isMajor = Math.abs(Math.round(level/majorInterval)*majorInterval - level) < interval*0.01;
-      const target = isMajor ? majorVerts : minorVerts;
-      const levelCandidates = [];
-      for (let i = 0; i < srcIdx.length; i += 3) {
-        const a = srcIdx[i], b = srcIdx[i+1], c = srcIdx[i+2];
-        if (!(heights[a] < baseY && heights[b] < baseY && heights[c] < baseY)) continue;
-        const ha = heights[a], hb = heights[b], hc = heights[c];
-        const pts = [];
-        for (const [p, q, hp, hq] of [[a,b,ha,hb],[b,c,hb,hc],[c,a,hc,ha]]) {
-          if ((hp < level) !== (hq < level)) {
-            const t = (level-hp)/(hq-hp);
-            pts.push(txCache[p]+t*(txCache[q]-txCache[p]), level*EXAG, tzCache[p]+t*(tzCache[q]-tzCache[p]));
-          }
-        }
-        if (pts.length === 6) {
-          target.push(...pts);
-          if (isMajor) {
-            const mx = (pts[0]+pts[3])/2, mz = (pts[2]+pts[5])/2;
-            let ok = true;
-            for (const c of levelCandidates) { const dx=mx-c[0],dz=mz-c[1]; if(dx*dx+dz*dz<2.25){ok=false;break;} }
-            if (ok) levelCandidates.push([mx, mz]);
-          }
-        }
-      }
-      for (const [cx, cz] of levelCandidates) candidates.push({ x:cx, y:level*EXAG, z:cz, level, type:'fill' });
-    }
-    return { minor: new Float32Array(minorVerts), major: new Float32Array(majorVerts), candidates };
+    return computeLevelLines(baseY, interval, false, 'fill');
   }
 
   function rebuildFillGhostViz(baseY) {
@@ -2896,11 +2891,17 @@
       const _cp = netCutGeo.attributes.position; _cp.setXYZ(0,0,0,0); _cp.setXYZ(1,0,0,0); _cp.needsUpdate = true;
       const _fp = netFillGeo.attributes.position; for (let i = 0; i < 6; i++) _fp.setXYZ(i,0,0,0); _fp.needsUpdate = true;
     }
-    renderer.setRenderTarget(depthTarget);
-    renderer.render(depthScene, camera);
-    renderer.setRenderTarget(null);
-    renderer.readRenderTargetPixels(depthTarget, 0, 0, dtW, dtH, depthBuffer);
-    depthReady = true;
+    // Label occlusion reads depth asynchronously: a blocking readPixels made the CPU wait for
+    // the GPU every frame. Labels now see depth a frame or two old, which is invisible.
+    if (!depthReading) {
+      depthReading = true;
+      renderer.setRenderTarget(depthTarget);
+      renderer.render(depthScene, camera);
+      renderer.setRenderTarget(null);
+      renderer.readRenderTargetPixelsAsync(depthTarget, 0, 0, dtW, dtH, depthBuffer)
+        .then(() => { depthReady = true; })
+        .finally(() => { depthReading = false; });
+    }
 
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
