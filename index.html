@@ -609,18 +609,10 @@
 <script type="module">
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import Stats from 'three/addons/libs/stats.module.js';
   import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
   const eio = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
-  const stats = new Stats();
-  stats.dom.style.position = 'fixed';
-  stats.dom.style.top = '0';
-  stats.dom.style.left = '0';
-  stats.dom.style.transform = 'scale(0.6)';
-  stats.dom.style.transformOrigin = 'top left';
-  document.body.appendChild(stats.dom);
 
   const labelRenderer = new CSS2DRenderer();
   labelRenderer.setSize(innerWidth, innerHeight);
@@ -967,6 +959,15 @@
   }
 
   rebuildTerrain();
+
+  // A site change morphs: the old surface flows into the new one instead of snapping
+  const MORPH_MS = 1400;
+  let morph = null;
+  function applyHeights() {
+    for (let i = 0; i < tPos.count; i++) tPos.setY(i, heights[i] * EXAG);
+    tPos.needsUpdate = true;
+    terrainGeo.computeVertexNormals();
+  }
 
   function computeContour(baseY) {
     const verts = [], ringVerts = [], wallPts = [];
@@ -2023,8 +2024,12 @@
       METERS_PER_UNIT = elevData.tileMeters / SIZE;
       UNIT_SCALE = METERS_PER_UNIT;
       VOL_SCALE  = UNIT_SCALE ** 3;
+      const from = heights.slice();
       rebuildTerrain();
       tuneTerrainRange();
+      morph = { from, to: heights.slice(), start: performance.now() };
+      heights.set(from);
+      applyHeights();
       baseTweenTarget = BASE_TARGET;
       baseTweening = true;
       syncFill(document.getElementById('base-slider'));
@@ -2797,6 +2802,15 @@
       syncFill(slider);
       applyBase(BASE_Y);
     }
+    if (morph) {
+      const t = Math.min(1, (performance.now() - morph.start) / MORPH_MS);
+      const e = t * t * t * (t * (t * 6 - 15) + 10);
+      if (t < 1) for (let i = 0; i < heights.length; i++) heights[i] = morph.from[i] + (morph.to[i] - morph.from[i]) * e;
+      else { heights.set(morph.to); morph = null; }
+      applyHeights();
+      lastBaseY = -Infinity;
+      if (!baseTweening) applyBase(BASE_Y);
+    }
     if (baseTweening && !isAnimating) {
       BASE_Y += (baseTweenTarget - BASE_Y) * (1 - Math.pow(0.008, dt));
       if (Math.abs(BASE_Y - baseTweenTarget) < 0.025) { BASE_Y = baseTweenTarget; baseTweening = false; }
@@ -2905,7 +2919,6 @@
 
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
-    stats.update();
   })();
 </script>
 </body>
