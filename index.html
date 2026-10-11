@@ -324,8 +324,8 @@
       text-shadow:0 1px 14px rgba(0,0,0,0.4); pointer-events:none; opacity:0;
     }
     #verdict b { font-weight:600; }
-    #verdict .v-vol.cut  { color:rgba(255,150,150,0.98); }
-    #verdict .v-vol.fill { color:rgba(90,200,255,0.98); }
+    #verdict .v-vol.cut  { color:var(--cut, rgba(255,150,150,0.98)); }
+    #verdict .v-vol.fill { color:var(--fill, rgba(90,200,255,0.98)); }
     #verdict .v-cmp { display:block; margin-top:0.4em; font-size:0.52em; font-weight:400; letter-spacing:0; color:rgba(255,255,255,0.55); }
     .credit {
       position:fixed; bottom:10px; left:10px;
@@ -565,12 +565,14 @@
     <div class="grp">
       <div class="csr cut-sl">
         <div class="csr-fill"></div>
+        <input type="color" class="cs" id="cut-color" title="cut colour">
         <span class="csr-label">Cut Depth</span>
         <span class="csr-val" id="offset-label">0.0 m</span>
         <input type="range" id="offset-slider" min="0" max="20" step="0.05" value="0">
       </div>
       <div class="csr fill-sl">
         <div class="csr-fill"></div>
+        <input type="color" class="cs" id="fill-color" title="fill colour">
         <span class="csr-label">Fill Depth</span>
         <span class="csr-val" id="fill-offset-label">0.0 m</span>
         <input type="range" id="fill-offset-slider" min="0" max="20" step="0.05" value="0">
@@ -587,14 +589,14 @@
       <div class="csr">
         <div class="csr-fill"></div>
         <input type="color" class="cs" id="wall-top-color" value="#ff0000">
-        <span class="csr-label">Top Color</span>
+        <span class="csr-label">Wall Top Color</span>
         <span class="csr-val" id="wall-top-alpha-val">0.10</span>
         <input type="range" id="wall-top-alpha" min="0" max="1" step="0.05" value="0.1">
       </div>
       <div class="csr">
         <div class="csr-fill"></div>
         <input type="color" class="cs" id="wall-bot-color" value="#000000">
-        <span class="csr-label">Bottom Color</span>
+        <span class="csr-label">Wall Bottom Color</span>
         <span class="csr-val" id="wall-bot-alpha-val">0.00</span>
         <input type="range" id="wall-bot-alpha" min="0" max="1" step="0.05" value="0">
       </div>
@@ -887,7 +889,11 @@
     transparent: true,
   });
 
+  const cutColor  = new THREE.Color().setRGB(0.96, 0.08, 0.08);
+  const fillColor = new THREE.Color().setRGB(0.03, 0.35, 0.78);
   terrainMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uCutCol  = { value: cutColor };
+    shader.uniforms.uFillCol = { value: fillColor };
     shader.uniforms.uBaseY    = { value: BASE_Y };
     shader.uniforms.uViewMode = { value: 0 };
     shader.uniforms.uSatMap   = { value: null };
@@ -913,12 +919,12 @@
       '#include <begin_vertex>\nvTerrainY = position.y;\nvTerrainUV = vec2(position.x / 22.0 + 0.5, position.z / 22.0 + 0.5);'
     );
 
-    shader.fragmentShader = 'varying float vTerrainY;\nvarying vec2 vTerrainUV;\nuniform float uBaseY;\nuniform int uViewMode;\nuniform sampler2D uSatMap;\nuniform int uHasSat;\nuniform float uPeak;\nuniform float uLow;\nuniform float uSatReveal;\nuniform float uCutReveal;\nuniform float uFillReveal;\n' + shader.fragmentShader;
+    shader.fragmentShader = 'varying float vTerrainY;\nvarying vec2 vTerrainUV;\nuniform float uBaseY;\nuniform int uViewMode;\nuniform sampler2D uSatMap;\nuniform int uHasSat;\nuniform float uPeak;\nuniform float uLow;\nuniform float uSatReveal;\nuniform float uCutReveal;\nuniform float uFillReveal;\nuniform vec3 uCutCol;\nuniform vec3 uFillCol;\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
       `
-      vec3 cutCol  = vec3(0.96, 0.08, 0.08);
-      vec3 fillCol = vec3(0.03, 0.35, 0.78);
+      vec3 cutCol  = uCutCol;
+      vec3 fillCol = uFillCol;
       float normY   = clamp((vTerrainY - uLow) / max(uPeak - uLow, 0.001), 0.0, 1.0);
       float satMask = uHasSat == 1 ? smoothstep(uSatReveal + 0.08, uSatReveal - 0.08, normY) : 0.0;
       vec3 satTex   = uHasSat == 1 ? texture2D(uSatMap, vTerrainUV).rgb : vec3(0.06, 0.06, 0.09);
@@ -2494,6 +2500,20 @@
 
   document.getElementById('minor-color').addEventListener('input', (e) => { ghostMinorMat.color.set(e.target.value); });
   document.getElementById('major-color').addEventListener('input', (e) => { ghostMajorMat.color.set(e.target.value); });
+  const cutPicker = document.getElementById('cut-color'), fillPicker = document.getElementById('fill-color');
+  cutPicker.value  = '#' + cutColor.getHexString();
+  fillPicker.value = '#' + fillColor.getHexString();
+  function paintZone(isCut, hex) {
+    (isCut ? cutColor : fillColor).set(hex);
+    for (const m of isCut ? [cutBranchMat, cutTrunkMat] : [fillBranchMat, fillTrunkMat]) m.uniforms.uColor.value.set(hex);
+    const node = (isCut ? cutNodeMesh : fillNodeMesh).material;
+    node.color.set(hex); node.emissive.set(hex);
+    (isCut ? cutHaloMat : fillHaloMat).color.set(hex);
+    (isCut ? netCutLines : netFillLines).material.color.set(hex);
+    document.documentElement.style.setProperty(isCut ? '--cut' : '--fill', hex);
+  }
+  cutPicker.addEventListener('input', e => paintZone(true, e.target.value));
+  fillPicker.addEventListener('input', e => paintZone(false, e.target.value));
   document.getElementById('wall-top-color').addEventListener('input', (e) => {
     wallUniforms.uTopColor.value.set(e.target.value);
     cwu.uTopColor.value.set(e.target.value);
