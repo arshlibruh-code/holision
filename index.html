@@ -2122,6 +2122,14 @@
         }
       }).catch(err => console.error('[sat]', err));
     } catch (err) {
+      // Mapterhorn's lidar zooms (13+) only exist where a country publishes lidar; step down a
+      // zoom and show it on the slider, so the view says what was actually loaded
+      if (DEM_SOURCE === 'mapterhorn' && z > 12) {
+        const c = tileCenterLatLon(x, y, z);
+        const t = latLonToTile(c.lat, c.lon, z - 1);
+        zoomSlider.value = z - 1; zoomLabel.textContent = z - 1; syncFill(zoomSlider);
+        return await loadTile(t.x, t.y, z - 1, force);
+      }
       console.error(err);
       alert('Failed to load tile: ' + err.message);
     } finally {
