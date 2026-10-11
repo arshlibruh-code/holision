@@ -102,6 +102,7 @@
     .fc-val.fv { color:rgba(90,200,255,0.8); }
 
     /* custom slider row */
+    #spin-row.off { opacity: 0.35; pointer-events: none; }
     .csr {
       position:relative; height:28px;
       display:flex; align-items:center; padding:0 10px;
@@ -502,6 +503,12 @@
         <span class="csr-val" id="exag-label">1.0×</span>
         <input type="range" id="exag-slider" min="0.5" max="5" step="0.1" value="1">
       </div>
+      <div class="csr off" id="spin-row">
+        <div class="csr-fill"></div>
+        <span class="csr-label">Spin speed</span>
+        <span class="csr-val" id="spin-label">0.6×</span>
+        <input type="range" id="spin-slider" min="0.1" max="3" step="0.1" value="0.6" disabled>
+      </div>
       <div class="pan-grid">
         <div class="nav-info">
           <p class="nav-desc">Shift terrain one tile<br>in any cardinal direction</p>
@@ -650,7 +657,7 @@
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
   controls.autoRotate = false;
-  controls.autoRotateSpeed = 2.0;
+  controls.autoRotateSpeed = 0.6;
   controls.target.set(0, -3, 0);
   controls.minDistance = 8;
   controls.maxDistance = 85;
@@ -1233,64 +1240,89 @@
       for (const v of verts) {
         if (heights[v] > maxH) { maxH = heights[v]; maxV = v; }
       }
-      islands.push({ cx: txCache[maxV], cy: maxH * EXAG + CUT_OFFSET, cz: tzCache[maxV], vol });
+      islands.push({ cx: txCache[maxV], cy: maxH * EXAG, cz: tzCache[maxV], vol });
     }
     return islands;
   }
 
+  // Cut and fill labels: a rebuild only sets where each label should be; placeVolumeAnnotations()
+  // glides it there every frame, so a label still reacts at once but never teleports.
+  const CONV_LIFT = 5.0, VERT_LIFT = 2.5, TRUNK = 2.5, MIN_ISLAND_SHARE = 0.01;
+  const annRig = {};
+  for (const side of ['cut', 'fill']) annRig[side] = { active: false, islands: [], total: 0, tgt: new THREE.Vector3(), pos: new THREE.Vector3(), lift: 0, liftTgt: 0, snap: true, shown: '', changedAt: 0 };
+
+  function setVolumeTarget(side, islands) {
+    const r = annRig[side];
+    if (islands.length === 0) { r.active = false; r.snap = true; return; }
+    const total = islands.reduce((s, i) => s + i.vol, 0);
+    // slivers under 1% of the volume don't pull the label around
+    const big = islands.filter(i => i.vol >= total * MIN_ISLAND_SHARE);
+    const keep = big.length ? big : [islands.reduce((a, b) => (b.vol > a.vol ? b : a))];
+    const w = keep.reduce((s, i) => s + i.vol, 0) || 1;
+    let x = 0, z = 0;
+    for (const i of keep) { x += i.cx * i.vol / w; z += i.cz * i.vol / w; }
+    const y = side === 'cut' ? Math.max(...keep.map(i => i.cy)) : Math.min(...keep.map(i => i.cy));
+    r.tgt.set(x, y, z);
+    r.liftTgt = keep.length > 1 ? CONV_LIFT : 0;
+    if (total !== r.total) r.changedAt = performance.now();
+    r.islands = keep; r.total = total; r.active = true;
+  }
+
   function rebuildCutAnnotation(baseY) {
-    if (!cutAnn) return;
-    const islands = detectIslands(baseY);
-    if (islands.length === 0) {
-      cutBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-      const tp = cutTrunkGeo.attributes.position;
-      tp.setXYZ(0,0,0,0); tp.setXYZ(1,0,0,0); tp.setXYZ(2,0,0,0);
-      tp.needsUpdate = true;
-      cutAnn.div.style.opacity = '0';
-      cutHalo.visible = false;
-      cutAnnActive = false;
-      return;
-    }
+    if (cutAnn) setVolumeTarget('cut', detectIslands(baseY));
+  }
 
-    const totalVol = islands.reduce((s, i) => s + i.vol, 0);
-    const CONV_LIFT = 5.0;
-    let convX = 0, convZ = 0;
-    for (const isl of islands) { convX += isl.cx; convZ += isl.cz; }
-    convX /= islands.length; convZ /= islands.length;
-    const convY = islands.length > 1
-      ? Math.max(...islands.map(i => i.cy)) + CONV_LIFT
-      : islands[0].cy;
+  // While a volume is changing, show 3 significant figures so the number doesn't shimmer
+  function fmtVol(v, settled) {
+    const m = Math.round(v * VOL_SCALE);
+    if (settled || m === 0) return m.toLocaleString();
+    const p = 10 ** Math.max(0, Math.floor(Math.log10(Math.abs(m))) - 2);
+    return (Math.round(m / p) * p).toLocaleString();
+  }
 
-    // branches only when multiple islands — vertical up then diagonal to convergence
-    if (islands.length > 1) {
-      const VERT_LIFT = 2.5;
-      const bv = [];
-      for (const isl of islands) {
-        const kx = isl.cx, ky = isl.cy + VERT_LIFT, kz = isl.cz;
-        bv.push(isl.cx, isl.cy, isl.cz,  kx, ky, kz);   // vertical
-        bv.push(kx, ky, kz,  convX, convY, convZ);        // diagonal
+  function placeVolumeAnnotations(dt) {
+    const k = 1 - Math.exp(-dt * 20), kl = 1 - Math.exp(-dt * 10), now = performance.now();
+    for (const side of ['cut', 'fill']) {
+      const cut = side === 'cut', up = cut ? 1 : -1, r = annRig[side];
+      const ann = cut ? cutAnn : fillAnn;
+      if (!ann) continue;
+      const branchGeo = cut ? cutBranchGeo : fillBranchGeo, trunkGeo = cut ? cutTrunkGeo : fillTrunkGeo;
+      const halo = cut ? cutHalo : fillHalo, mid = cut ? cutTrunkMid : fillTrunkMid;
+      const tp = trunkGeo.attributes.position;
+      if (!r.active) {
+        if (cut) cutAnnActive = false; else fillAnnActive = false;
+        ann.div.style.opacity = '0'; halo.visible = false;
+        if (branchGeo.attributes.position?.count) branchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+        tp.setXYZ(0, 0, 0, 0); tp.setXYZ(1, 0, 0, 0); tp.needsUpdate = true;
+        continue;
       }
-      cutBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bv), 3));
-    } else {
-      cutBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      if (r.snap) { r.pos.copy(r.tgt); r.lift = r.liftTgt; r.snap = false; }
+      r.pos.lerp(r.tgt, k);
+      r.lift += (r.liftTgt - r.lift) * kl;
+      const off = cut ? CUT_OFFSET : -FILL_OFFSET;
+      const cx = r.pos.x, cz = r.pos.z, cy = r.pos.y + off + up * r.lift;
+      const bv = [];
+      if (r.lift > 0.05 && r.islands.length > 1) {
+        // branches grow with the lift, so they ease in as islands split
+        const vl = VERT_LIFT * (r.lift / CONV_LIFT);
+        for (const isl of r.islands) {
+          const iy = isl.cy + off, ky = iy + up * vl;
+          bv.push(isl.cx, iy, isl.cz, isl.cx, ky, isl.cz, isl.cx, ky, isl.cz, cx, cy, cz);
+        }
+      }
+      if (bv.length || branchGeo.attributes.position?.count) branchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bv), 3));
+      const endY = cy + up * TRUNK;
+      tp.setXYZ(0, cx, cy, cz); tp.setXYZ(1, cx, endY, cz); tp.needsUpdate = true;
+      ann.obj.position.set(cx, endY, cz);
+      const text = `${fmtVol(r.total, now - r.changedAt > 300)} m³`;
+      if (text !== r.shown) { ann.lbl.textContent = cut ? 'Cut' : 'Fill'; ann.val.textContent = text; r.shown = text; }
+      ann.div.style.opacity = '1';
+      mid.set(cx, (cy + endY) / 2, cz);
+      halo.position.set(cx, cy, cz); halo.visible = true;
+      if (cut) { cutAnnActive = true; cutTotalVol = r.total; } else { fillAnnActive = true; fillTotalVol = r.total; }
+      if (bv.length) setLineDistances(branchGeo);
+      setLineDistances(trunkGeo);
     }
-
-    // vertical trunk straight up from convergence point
-    const trunkTopY = convY + 2.5;
-    const tp = cutTrunkGeo.attributes.position;
-    tp.setXYZ(0, convX, convY, convZ);
-    tp.setXYZ(1, convX, trunkTopY, convZ);
-    tp.needsUpdate = true;
-    cutAnn.obj.position.set(convX, trunkTopY, convZ);
-    cutAnn.lbl.textContent = 'Cut'; cutAnn.val.textContent = `${Math.round(totalVol * VOL_SCALE).toLocaleString()} m³`;
-    cutAnn.div.style.opacity = '1';
-    cutTrunkMid.set(convX, (convY + trunkTopY) / 2, convZ);
-    cutHalo.position.set(convX, convY, convZ);
-    cutHalo.visible = true;
-    cutAnnActive = true;
-    cutTotalVol = totalVol;
-    setLineDistances(cutBranchGeo);
-    setLineDistances(cutTrunkGeo);
   }
 
   function detectFillIslands(baseY) {
@@ -1324,64 +1356,14 @@
       for (const v of verts) {
         if (heights[v] < minH) { minH = heights[v]; minV = v; }
       }
-      islands.push({ cx: txCache[minV], cy: minH * EXAG - FILL_OFFSET, cz: tzCache[minV], vol });
+      islands.push({ cx: txCache[minV], cy: minH * EXAG, cz: tzCache[minV], vol });
     }
     return islands;
   }
 
   function rebuildFillAnnotation(baseY) {
-    if (!fillAnn) return;
-    const islands = detectFillIslands(baseY);
-    if (islands.length === 0) {
-      fillBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-      const tp = fillTrunkGeo.attributes.position;
-      tp.setXYZ(0,0,0,0); tp.setXYZ(1,0,0,0); tp.needsUpdate = true;
-      fillAnn.div.style.opacity = '0';
-      fillHalo.visible = false;
-      fillAnnActive = false;
-      return;
-    }
-    const totalVol = islands.reduce((s, i) => s + i.vol, 0);
-    let convX = 0, convZ = 0;
-    for (const isl of islands) { convX += isl.cx; convZ += isl.cz; }
-    convX /= islands.length; convZ /= islands.length;
-    const convY = islands.length > 1
-      ? Math.min(...islands.map(i => i.cy)) - 5.0
-      : islands[0].cy;
-
-    if (islands.length > 1) {
-      const bv = [];
-      for (const isl of islands) {
-        const kx = isl.cx, ky = isl.cy - 2.5, kz = isl.cz;
-        bv.push(isl.cx, isl.cy, isl.cz,  kx, ky, kz);
-        bv.push(kx, ky, kz,  convX, convY, convZ);
-      }
-      fillBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bv), 3));
-    } else {
-      fillBranchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-    }
-
-    const trunkBotY = convY - 2.5;
-    const tp = fillTrunkGeo.attributes.position;
-    tp.setXYZ(0, convX, convY,    convZ);
-    tp.setXYZ(1, convX, trunkBotY, convZ);
-    tp.needsUpdate = true;
-    fillAnn.obj.position.set(convX, trunkBotY, convZ);
-    fillAnn.lbl.textContent = 'Fill'; fillAnn.val.textContent = `${Math.round(totalVol * VOL_SCALE).toLocaleString()} m³`;
-    fillAnn.div.style.opacity = '1';
-    fillTrunkMid.set(convX, (convY + trunkBotY) / 2, convZ);
-    fillHalo.position.set(convX, convY, convZ);
-    fillHalo.visible = true;
-    fillAnnActive = true;
-    fillTotalVol = totalVol;
-    setLineDistances(fillBranchGeo);
-    setLineDistances(fillTrunkGeo);
+    if (fillAnn) setVolumeTarget('fill', detectFillIslands(baseY));
   }
-
-  const baseCache = new Map();
-  let precomputeRaf = null;
-  const CACHE_MIN = -2, CACHE_MAX = 6, CACHE_STEP = 0.05;
-  const CACHE_STEPS = Math.round((CACHE_MAX - CACHE_MIN) / CACHE_STEP) + 1;
 
   function schedulePrecompute() {
     baseCache.clear();
@@ -1449,8 +1431,6 @@
       rebuildContour(baseY);
       rebuildCutAnnotation(baseY);
       rebuildFillAnnotation(baseY);
-    } else {
-      applyOffsetFastPath();
     }
 
     if (ghostGroup) {
@@ -1477,40 +1457,6 @@
     if (baseLeader) {
       updateAnnotations(baseY);
       syncContourLabels();
-    }
-  }
-
-  function applyOffsetFastPath() {
-    const dc = CUT_OFFSET - (ghostGroup.position.y || 0);
-    const df = FILL_OFFSET - (-(ghostFillGroup.position.y || 0));
-
-    if (cutAnnActive && cutTrunkMid.length() > 0) {
-      cutTrunkMid.y += dc;
-      const ctp = cutTrunkGeo.attributes.position;
-      for (let i = 0; i < ctp.count; i++) { ctp.setY(i, ctp.getY(i) + dc); }
-      ctp.needsUpdate = true;
-      cutHalo.position.y += dc;
-      if (cutAnn) cutAnn.obj.position.y += dc;
-      const cbp = cutBranchGeo.attributes.position;
-      if (cbp.count > 0) {
-        const maxYIdx = cbp.count - 1;
-        for (let i = 0; i < cbp.count; i++) { cbp.setY(i, cbp.getY(i) + dc); }
-        cbp.needsUpdate = true;
-      }
-    }
-
-    if (fillAnnActive && fillTrunkMid.length() > 0) {
-      fillTrunkMid.y -= df;
-      const ftp = fillTrunkGeo.attributes.position;
-      for (let i = 0; i < ftp.count; i++) { ftp.setY(i, ftp.getY(i) - df); }
-      ftp.needsUpdate = true;
-      fillHalo.position.y -= df;
-      if (fillAnn) fillAnn.obj.position.y -= df;
-      const fbp = fillBranchGeo.attributes.position;
-      if (fbp.count > 0) {
-        for (let i = 0; i < fbp.count; i++) { fbp.setY(i, fbp.getY(i) - df); }
-        fbp.needsUpdate = true;
-      }
     }
   }
 
@@ -1726,21 +1672,16 @@
   function updateAnnotationSides() {
     for (const key of ['base', 'peak', 'low', 'ground']) {
       const d = annDirData[key];
-      if (!d.div || d.flipping) continue;
-      const sx2 = d.v2.clone().project(camera).x;
-      const sx3 = d.v3.clone().project(camera).x;
-      const newDir = sx3 >= sx2 ? 1 : -1;
-      if (d.dir !== 0 && newDir !== d.dir) {
-        d.flipping = true;
-        d.div.style.opacity = '0';
-        const cls = newDir === 1 ? 'ann-label' : 'ann-label-left';
-        setTimeout(() => {
-          d.div.className = cls;
-          d.div.style.opacity = '1';
-          d.flipping = false;
-        }, 150);
-      }
+      if (!d.div) continue;
+      const dx = d.v3.clone().project(camera).x - d.v2.clone().project(camera).x;
+      // dead zone: flip only once the leader clearly points the other way
+      if (d.dir !== 0 && Math.abs(dx) < 0.004) continue;
+      const newDir = dx >= 0 ? 1 : -1;
+      if (newDir === d.dir) continue;
       d.dir = newDir;
+      d.div.className = 'ann-label';
+      d.div.style.transition = 'transform .28s cubic-bezier(.2,0,.2,1), opacity .2s';
+      d.div.style.transform = newDir === 1 ? 'translate(10px, -50%)' : 'translate(calc(-100% - 10px), -50%)';
     }
   }
 
@@ -1776,7 +1717,7 @@
 
     netAnn.obj.position.set(meetX, meetY, meetZ);
     const net = cutTotalVol - fillTotalVol;
-    netAnn.lbl.textContent = 'Net'; netAnn.val.textContent = `${net >= 0 ? '+' : ''}${Math.round(Math.abs(net) * VOL_SCALE).toLocaleString()} m³`;
+    netAnn.lbl.textContent = 'Net'; netAnn.val.textContent = `${net >= 0 ? '+' : ''}${fmtVol(Math.abs(net), performance.now() - Math.max(annRig.cut.changedAt, annRig.fill.changedAt) > 300)} m³`;
     netAnn.div.className = 'ann-label-net';
     netAnn.div.style.opacity = '1';
     netLineTgt = 0.55;
@@ -2590,11 +2531,26 @@
   });
 
   const spinBtn = document.getElementById('spin-btn');
+  const spinSlider = document.getElementById('spin-slider');
+  const spinLabel  = document.getElementById('spin-label');
+  const spinRow    = document.getElementById('spin-row');
+  // The speed slider only works while spin is on
+  function setSpin(on) {
+    controls.autoRotate = on;
+    spinBtn.classList.toggle('active', on);
+    spinSlider.disabled = !on;
+    spinRow.classList.toggle('off', !on);
+  }
   spinBtn.addEventListener('click', () => {
-    controls.autoRotate = !controls.autoRotate;
+    setSpin(!controls.autoRotate);
     controls.enabled = true;
-    spinBtn.classList.toggle('active', controls.autoRotate);
   });
+  spinSlider.addEventListener('input', () => {
+    controls.autoRotateSpeed = parseFloat(spinSlider.value);
+    spinLabel.textContent = `${controls.autoRotateSpeed.toFixed(1)}×`;
+    syncFill(spinSlider);
+  });
+  syncFill(spinSlider);
 
 
   let isAnimating = false;
@@ -2854,7 +2810,7 @@
 
       if (!seqFinished && seqDone.size >= SEQ.length) {
         seqFinished = true;
-        setTimeout(() => { controls.autoRotate = true; spinBtn.classList.add('active'); }, 400);
+        setTimeout(() => setSpin(true), 400);
         setTimeout(() => {
           showSat = false;
           satRevealTarget = 0.0;
@@ -2967,6 +2923,7 @@
     const glowPulse = 0.92 + 0.08 * Math.sin(ts * 0.0006);
     if (cutHalo.visible)  cutHalo.scale.set(0.8 * glowPulse, 0.8 * glowPulse, 1);
     if (fillHalo.visible) fillHalo.scale.set(0.8 * glowPulse, 0.8 * glowPulse, 1);
+    placeVolumeAnnotations(dt);
     if (annDirData.base.div) updateAnnotationSides();
     updateNetConnector();
     netLineAlpha += (netLineTgt - netLineAlpha) * Math.min(1, dt * 5);
