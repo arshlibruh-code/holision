@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300..800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #08080c; }
@@ -315,6 +316,17 @@
       backdrop-filter: blur(6px);
       border-radius: 0;
     }
+    #verdict {
+      position:fixed; top:22px; left:24px; max-width:min(44ch, calc(100vw - 48px));
+      font-family:'Inter Tight', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-weight:300; font-size:clamp(18px, 2.5vw, 34px); line-height:1.14; letter-spacing:-0.02em;
+      font-variant-numeric:tabular-nums; color:rgba(255,255,255,0.9);
+      text-shadow:0 1px 14px rgba(0,0,0,0.4); pointer-events:none; opacity:0;
+    }
+    #verdict b { font-weight:600; }
+    #verdict .v-vol.cut  { color:rgba(255,150,150,0.98); }
+    #verdict .v-vol.fill { color:rgba(90,200,255,0.98); }
+    #verdict .v-cmp { display:block; margin-top:0.4em; font-size:0.52em; font-weight:400; letter-spacing:0; color:rgba(255,255,255,0.55); }
     .credit {
       position:fixed; bottom:10px; left:10px;
       font-family:'Share Tech Mono', monospace; font-size:10px; letter-spacing:-0.05em;
@@ -446,6 +458,7 @@
 <a class="credit" href="https://github.com/arshlibruh-code/holision" target="_blank" rel="noopener">@arshlibruh / holision</a>
 <a class="credit" id="dem-credit" style="bottom:24px" href="https://mapterhorn.com/attribution" target="_blank" rel="noopener">terrain © Mapterhorn</a>
 <div id="geo-hud"></div>
+<div id="verdict"></div>
 
 <div class="util-strip">
   <button id="anim-btn" class="util-btn" title="animate base Y">▶</button>
@@ -1280,6 +1293,83 @@
     return (Math.round(m / p) * p).toLocaleString();
   }
 
+  // The verdict: one sentence saying what the base level means for this ground.
+  // Pool: 50 x 25 x 2 m = 2,500 m3. Great Pyramid: about 2.6 million m3 (Wikipedia).
+  // Truckload: an assumed 15 m3 tipper load.
+  const TRUCK_M3 = 15, POOL_M3 = 2500, PYRAMID_M3 = 2.6e6;
+  const verdictEl = document.getElementById('verdict');
+  let verdictState = '', verdictHTML = '', verdictSwap = 0, verdictFade = 0, verdictLast = 0;
+  // the name of the site whose terrain is on screen, not the one just picked in the menu
+  let loadedSiteName = SITES[CURRENT_SITE]?.name ?? null;
+  const sig3 = v => { if (v === 0) return 0; const p = 10 ** (Math.floor(Math.log10(Math.abs(v))) - 2); return Math.round(v / p) * p; };
+  const trim = x => x.toPrecision(3).replace(/\.?0+$/, '');
+  function volWords(m3, settled) {
+    if (m3 >= 1e9) return `${trim(m3 / 1e9)} billion`;
+    if (m3 >= 1e6) return `${trim(m3 / 1e6)} million`;
+    return (settled ? Math.round(m3) : sig3(m3)).toLocaleString();
+  }
+  function compareVol(m3) {
+    if (m3 < 1000 * TRUCK_M3) { const n = Math.max(1, Math.round(m3 / TRUCK_M3)); return `${n.toLocaleString()} truckload${n === 1 ? '' : 's'}`; }
+    if (m3 < 1000 * POOL_M3) return `${sig3(m3 / POOL_M3).toLocaleString()} Olympic pools`;
+    const n = m3 / PYRAMID_M3;
+    return `${n < 10 ? n.toFixed(1) : sig3(n).toLocaleString()} Great Pyramids`;
+  }
+  // The base level where total cut equals total fill. Net volume falls steadily as the base rises,
+  // so bisection finds it; recomputed only when the terrain or exaggeration changes.
+  let balanceY = null, balanceStamp = '';
+  function balanceLevel() {
+    const stamp = `${heights[0]}|${heights[heights.length >> 1]}|${heights[heights.length - 1]}|${ANIM_MIN}|${ANIM_MAX}`;
+    if (stamp === balanceStamp) return balanceY;
+    const net = by => {
+      let v = 0;
+      for (let i = 0; i < srcIdx.length; i += 3) {
+        const da = heights[srcIdx[i]] - by, db = heights[srcIdx[i + 1]] - by, dc = heights[srcIdx[i + 2]] - by;
+        v += prismVol(da, db, dc) - prismVol(-da, -db, -dc);
+      }
+      return v;
+    };
+    let lo = ANIM_MIN, hi = ANIM_MAX;
+    for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (net(m) > 0) lo = m; else hi = m; }
+    balanceStamp = stamp; balanceY = (lo + hi) / 2;
+    return balanceY;
+  }
+
+  function updateVerdict(now) {
+    const c = annRig.cut, f = annRig.fill;
+    const C = (c.active ? c.total : 0) * VOL_SCALE, F = (f.active ? f.total : 0) * VOL_SCALE, N = C - F;
+    const show = seqFinished && !morph && !webcamActive && C + F > 0;
+    const dt = Math.min(0.1, (now - (verdictLast || now)) / 1000); verdictLast = now;
+    verdictFade += ((show ? annFade : 0) - verdictFade) * (1 - Math.exp(-dt * 6));
+    verdictEl.style.opacity = String(verdictFade);
+    if (!show) return;
+    const settled = now - Math.max(c.changedAt, f.changedAt) > 300;
+    const site = loadedSiteName ?? 'this ground';
+    const B = `${Math.round(BASE_Y * UNIT_SCALE).toLocaleString()} m`;
+    // heavier type for bigger volumes: 1,000 m3 reads light, a billion reads heavy
+    const weight = m3 => Math.round(Math.min(800, Math.max(300, 300 + (Math.log10(Math.max(m3, 1)) - 3) * 85)));
+    let state, html;
+    // balanced when the base sits within half a slider step of the exact balance level
+    const step = parseFloat(slider.step) || 0.05;
+    if (Math.abs(BASE_Y - balanceLevel()) <= step / 2 || Math.abs(N) <= 0.02 * Math.max(C, F)) {
+      state = 'balanced';
+      html = `At <b>${B}</b>, ${site} fills its own hollows.<span class="v-cmp">Nothing leaves. Nothing arrives.</span>`;
+    } else if (N > 0) {
+      state = 'surplus';
+      html = `Level ${site} at <b>${B}</b> and <span class="v-vol cut" style="font-weight:${weight(N)}">${volWords(N, settled)} m³</span> of earth walks away.<span class="v-cmp">${compareVol(N)}.</span>`;
+    } else {
+      state = 'short';
+      html = `Raise ${site} to <b>${B}</b> and the ground is <span class="v-vol fill" style="font-weight:${weight(-N)}">${volWords(-N, settled)} m³</span> hungry.<span class="v-cmp">${compareVol(-N)} of fill.</span>`;
+    }
+    if (state !== verdictState && verdictState) {
+      // a new state crossfades; numbers inside a state just tick
+      verdictSwap = now;
+    }
+    verdictState = state;
+    const swapT = Math.min(1, (now - verdictSwap) / 300);
+    if (swapT < 1) verdictEl.style.opacity = String(verdictFade * Math.abs(swapT * 2 - 1));
+    if ((swapT >= 0.5 || swapT >= 1) && html !== verdictHTML) { verdictEl.innerHTML = html; verdictHTML = html; }
+  }
+
   function placeVolumeAnnotations(dt) {
     const k = 1 - Math.exp(-dt * 20), kl = 1 - Math.exp(-dt * 10), now = performance.now();
     for (const side of ['cut', 'fill']) {
@@ -2033,6 +2123,7 @@
       const center = tileCenterLatLon(x, y, z);
       anchorLat = center.lat; anchorLon = center.lon;
       const matchedSite = Object.values(SITES).find(s => latLonToTile(s.lat, s.lon, z).x === x && latLonToTile(s.lat, s.lon, z).y === y);
+      loadedSiteName = matchedSite?.name || null;
       updateGeoHud(center.lat, center.lon, z, matchedSite?.name || null);
       elevData = data;
       METERS_PER_UNIT = elevData.tileMeters / SIZE;
@@ -2924,6 +3015,7 @@
     if (cutHalo.visible)  cutHalo.scale.set(0.8 * glowPulse, 0.8 * glowPulse, 1);
     if (fillHalo.visible) fillHalo.scale.set(0.8 * glowPulse, 0.8 * glowPulse, 1);
     placeVolumeAnnotations(dt);
+    updateVerdict(performance.now());
     if (annDirData.base.div) updateAnnotationSides();
     updateNetConnector();
     netLineAlpha += (netLineTgt - netLineAlpha) * Math.min(1, dt * 5);
