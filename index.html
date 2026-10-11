@@ -443,6 +443,7 @@
 </div>
 
 <a class="credit" href="https://github.com/arshlibruh-code/holision" target="_blank" rel="noopener">@arshlibruh / holision</a>
+<a class="credit" id="dem-credit" style="bottom:24px" href="https://mapterhorn.com/attribution" target="_blank" rel="noopener">terrain © Mapterhorn</a>
 <div id="geo-hud"></div>
 
 <div class="util-strip">
@@ -487,6 +488,13 @@
         <span class="csr-label">Zoom</span>
         <span class="csr-val" id="zoom-label">13</span>
         <input type="range" id="zoom-slider" min="8" max="14" step="1" value="13">
+      </div>
+      <div class="fp-row" style="align-items:center;">
+        <div class="fc-lbl">Data</div>
+        <select id="dem-select" class="site-sel">
+          <option value="mapterhorn">Mapterhorn (lidar to 0.4 m)</option>
+          <option value="aws">AWS Terrain Tiles (30 m)</option>
+        </select>
       </div>
       <div class="csr">
         <div class="csr-fill"></div>
@@ -752,18 +760,30 @@
     return { lat: latRad * 180 / Math.PI, lon };
   }
 
+  // Both sources are Terrarium-encoded. Mapterhorn merges Copernicus 30 m with national lidar
+  // (down to 0.4 m), measured within 5 m of official summit heights where lidar exists.
+  const DEM_SOURCES = {
+    mapterhorn: { size: 512, url: (z, x, y) => `https://tiles.mapterhorn.com/${z}/${x}/${y}.webp`,
+                  name: 'Mapterhorn', credit: 'terrain © Mapterhorn', creditUrl: 'https://mapterhorn.com/attribution' },
+    aws:        { size: 256, url: (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`,
+                  name: 'AWS Terrain Tiles', credit: 'terrain: AWS Terrain Tiles', creditUrl: 'https://registry.opendata.aws/terrain-tiles/' },
+  };
+  let DEM_SOURCE = 'mapterhorn';
+
   async function loadTerrarium(x, y, z) {
-    const url = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+    const src = DEM_SOURCES[DEM_SOURCE];
+    const S = src.size;
+    const url = src.url(z, x, y);
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('tile fetch failed: ' + url)); img.src = url; });
-    const off = new OffscreenCanvas(256, 256);
+    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error(`${src.name} has no tile at zoom ${z} here. Try a lower zoom or the other data source.`)); img.src = url; });
+    const off = new OffscreenCanvas(S, S);
     const ctx = off.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    const data = ctx.getImageData(0, 0, 256, 256).data;
-    const elev = new Float32Array(256 * 256);
+    const data = ctx.getImageData(0, 0, S, S).data;
+    const elev = new Float32Array(S * S);
     let min = Infinity, max = -Infinity;
-    for (let i = 0; i < 256 * 256; i++) {
+    for (let i = 0; i < S * S; i++) {
       const e = (data[i*4] * 256 + data[i*4+1] + data[i*4+2] / 256) - 32768;
       elev[i] = e;
       if (e < min) min = e;
@@ -771,7 +791,7 @@
     }
     const { lat } = tileCenterLatLon(x, y, z);
     const tileMeters = 40075016.686 * Math.cos(lat * Math.PI / 180) / (2 ** z);
-    return { elev, min, max, tileMeters, lat };
+    return { elev, size: S, min, max, tileMeters, lat };
   }
 
   async function loadSatellite(x, y, z) {
@@ -806,13 +826,14 @@
 
 
   function sampleElev(u, v) {
-    const x = u * 255, y = v * 255;
+    const S = elevData.size, L = S - 1;
+    const x = u * L, y = v * L;
     const x0 = Math.floor(x), y0 = Math.floor(y);
-    const x1 = Math.min(255, x0 + 1), y1 = Math.min(255, y0 + 1);
+    const x1 = Math.min(L, x0 + 1), y1 = Math.min(L, y0 + 1);
     const fx = x - x0, fy = y - y0;
     const e = elevData.elev;
-    const a = e[y0 * 256 + x0], b = e[y0 * 256 + x1];
-    const c = e[y1 * 256 + x0], d = e[y1 * 256 + x1];
+    const a = e[y0 * S + x0], b = e[y0 * S + x1];
+    const c = e[y1 * S + x0], d = e[y1 * S + x1];
     return (a * (1-fx) + b * fx) * (1-fy) + (c * (1-fx) + d * fx) * fy;
   }
   let EXAG = 1.0;
@@ -1961,6 +1982,14 @@
   }
 
   const siteSelect    = document.getElementById('site-select');
+  const demSelect     = document.getElementById('dem-select');
+  const demCredit     = document.getElementById('dem-credit');
+  demSelect.addEventListener('change', () => {
+    DEM_SOURCE = demSelect.value;
+    const src = DEM_SOURCES[DEM_SOURCE];
+    demCredit.textContent = src.credit; demCredit.href = src.creditUrl;
+    loadTile(currentTile.x, currentTile.y, currentTile.z, true);
+  });
   const siteCustomRow = document.getElementById('site-custom-row');
   const siteLatLon    = document.getElementById('site-latlon');
   const zoomSlider    = document.getElementById('zoom-slider');
@@ -1974,6 +2003,7 @@
   exagSlider.addEventListener('input', () => {
     EXAG = parseFloat(exagSlider.value);
     exagLabel.textContent = `${EXAG.toFixed(1)}×`;
+    rigRetarget();
     syncFill(exagSlider);
     rebuildTerrain();
     if (terrainShader) {
@@ -2011,6 +2041,28 @@
       terrainShader.uniforms.uLow.value  = pmin * EXAG;
     }
   }
+  // Camera rig: when the terrain changes height or relief (a new site, the exaggeration slider),
+  // the orbit target and camera glide with it on a critically damped spring, keeping your angle.
+  const rig = { goal: 0, pos: 0, vel: 0, dGoal: 1, dPos: 1, dVel: 0 };
+  function rigRetarget(snap = false) {
+    const mid = (ANIM_MIN + ANIM_MAX) / 2 * EXAG;
+    const radius = Math.hypot(SIZE / 2, SIZE / 2, (ANIM_MAX - ANIM_MIN) / 2 * EXAG);
+    rig.goal = mid; rig.dGoal = radius;
+    if (snap) { rig.pos = mid; rig.dPos = radius; rig.vel = rig.dVel = 0; }
+  }
+  function rigStep(dt) {
+    const w = 5;
+    const spring = (pos, vel, goal) => { vel += (-2 * w * vel - w * w * (pos - goal)) * dt; return [pos + vel * dt, vel]; };
+    const [p, v] = spring(rig.pos, rig.vel, rig.goal);
+    const [dp, dv] = spring(rig.dPos, rig.dVel, rig.dGoal);
+    const dy = p - rig.pos, scale = dp / rig.dPos;
+    rig.pos = p; rig.vel = v; rig.dPos = dp; rig.dVel = dv;
+    if (Math.abs(dy) < 1e-6 && Math.abs(scale - 1) < 1e-6) return;
+    controls.target.y += dy;
+    camera.position.y += dy;
+    camera.position.sub(controls.target).multiplyScalar(scale).add(controls.target);
+  }
+
 
   const panUp     = document.querySelector('.pan-up');
   const panDown   = document.querySelector('.pan-down');
@@ -2025,12 +2077,12 @@
     siteLatLon.value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   }
 
-  async function loadTile(x, y, z) {
+  async function loadTile(x, y, z, force = false) {
     if (webcamActive) return;
     const n = 2 ** z;
     x = ((x % n) + n) % n;
     if (y < 0 || y >= n) return;
-    if (x === currentTile.x && y === currentTile.y && z === currentTile.z) return;
+    if (!force && x === currentTile.x && y === currentTile.y && z === currentTile.z) return;
 
     siteSelect.classList.add('loading');
     document.getElementById('tile-loader').classList.add('active');
@@ -2048,6 +2100,7 @@
       const from = heights.slice();
       rebuildTerrain();
       tuneTerrainRange();
+      rigRetarget();
       morph = { from, to: heights.slice(), start: performance.now() };
       annFadeTgt = 0;
       heights.set(from);
@@ -2360,6 +2413,7 @@
   zoomLabel.textContent = initSite.z;
   syncFill(zoomSlider);
   tuneTerrainRange();
+  rigRetarget(true);
   updatePanState();
   updateGeoHud(initSite.lat, initSite.lon, initSite.z, initSite.name);
 
@@ -2842,6 +2896,7 @@
       syncFill(slider);
       applyBase(BASE_Y);
     }
+    rigStep(dt);
     controls.update();
     satRevealCurrent += (satRevealTarget - satRevealCurrent) * (1 - Math.pow(0.008, dt));
     if (terrainShader) terrainShader.uniforms.uSatReveal.value = satRevealCurrent;
