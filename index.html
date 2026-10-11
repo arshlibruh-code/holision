@@ -489,6 +489,14 @@
           <option value="vesuvius">Vesuvius</option>
           <option value="death-valley">Death Valley</option>
           <option value="hvannadalshnjukur">Hvannadalshnjúkur</option>
+          <option value="hambach">Hambach mine</option>
+          <option value="corta-atalaya">Corta Atalaya</option>
+          <option value="st-helens">Mount St. Helens</option>
+          <option value="eiger">Eiger</option>
+          <option value="preikestolen">Preikestolen</option>
+          <option value="sakurajima">Sakurajima</option>
+          <option value="hoover-dam">Hoover Dam</option>
+          <option value="kilauea">Kīlauea</option>
           <option value="custom">Custom…</option>
         </select>
         <button id="loc-btn" class="util-btn" title="use camera for live depth">
@@ -506,7 +514,7 @@
         <div class="csr-fill"></div>
         <span class="csr-label">Zoom</span>
         <span class="csr-val" id="zoom-label">13</span>
-        <input type="range" id="zoom-slider" min="8" max="14" step="1" value="13">
+        <input type="range" id="zoom-slider" min="8" max="16" step="1" value="13">
       </div>
       <div class="fp-row" style="align-items:center;">
         <div class="fc-lbl">Data</div>
@@ -758,6 +766,14 @@
     'vesuvius':      { lat: 40.8210, lon:  14.4260,  z: 13, name: 'Vesuvius' },
     'death-valley':  { lat: 36.5054, lon:-116.9347, z: 9, name: 'Death Valley' },
     'hvannadalshnjukur': { lat: 64.0163, lon: -16.6806, z: 13, name: 'Hvannadalshnjúkur' },
+    'hambach': { lat: 50.9108, lon: 6.5028, z: 12, name: 'Hambach mine' },
+    'corta-atalaya': { lat: 37.7033, lon: -6.6028, z: 14, name: 'Corta Atalaya' },
+    'st-helens': { lat: 46.2003, lon: -122.1894, z: 13, name: 'Mount St. Helens' },
+    'eiger': { lat: 46.5776, lon: 8.0053, z: 13, name: 'Eiger' },
+    'preikestolen': { lat: 58.9867, lon: 6.1875, z: 14, name: 'Preikestolen' },
+    'sakurajima': { lat: 31.5806, lon: 130.6581, z: 12, name: 'Sakurajima' },
+    'hoover-dam': { lat: 36.0158, lon: -114.7378, z: 15, name: 'Hoover Dam' },
+    'kilauea': { lat: 19.4211, lon: -155.2868, z: 13, name: 'Kīlauea' },
   };
   let CURRENT_SITE = 'grand-canyon';
 
@@ -1393,24 +1409,26 @@
 
   // The verdict: one sentence saying what the base level means for this ground.
   // Pool: 50 x 25 x 2 m = 2,500 m3. Great Pyramid: about 2.6 million m3 (Wikipedia).
-  // Truckload: an assumed 15 m3 tipper load.
-  const TRUCK_M3 = 15, POOL_M3 = 2500, PYRAMID_M3 = 2.6e6;
+  // Truckload: an assumed 15 m3 tipper load. Lake Geneva: 89 km3 (Wikipedia).
+  const TRUCK_M3 = 15, POOL_M3 = 2500, PYRAMID_M3 = 2.6e6, GENEVA_M3 = 89e9;
   const verdictEl = document.getElementById('verdict');
   let verdictState = '', verdictHTML = '', verdictSwap = 0, verdictFade = 0, verdictLast = 0;
   // the name of the site whose terrain is on screen, not the one just picked in the menu
   let loadedSiteName = SITES[CURRENT_SITE]?.name ?? null;
   const sig3 = v => { if (v === 0) return 0; const p = 10 ** (Math.floor(Math.log10(Math.abs(v))) - 2); return Math.round(v / p) * p; };
-  const trim = x => x.toPrecision(3).replace(/\.?0+$/, '');
+  const trim = x => Number(x.toPrecision(3)).toLocaleString();
+  // a billion m3 is one km3, the unit geologists use at landscape scale
   function volWords(m3, settled) {
-    if (m3 >= 1e9) return `${trim(m3 / 1e9)} billion`;
-    if (m3 >= 1e6) return `${trim(m3 / 1e6)} million`;
-    return (settled ? Math.round(m3) : sig3(m3)).toLocaleString();
+    if (m3 >= 1e9) return `${trim(m3 / 1e9)} km³`;
+    if (m3 >= 1e6) return `${trim(m3 / 1e6)} million m³`;
+    return `${(settled ? Math.round(m3) : sig3(m3)).toLocaleString()} m³`;
   }
   function compareVol(m3) {
     if (m3 < 1000 * TRUCK_M3) { const n = Math.max(1, Math.round(m3 / TRUCK_M3)); return `${n.toLocaleString()} truckload${n === 1 ? '' : 's'}`; }
     if (m3 < 1000 * POOL_M3) return `${sig3(m3 / POOL_M3).toLocaleString()} Olympic pools`;
-    const n = m3 / PYRAMID_M3;
-    return `${n < 10 ? n.toFixed(1) : sig3(n).toLocaleString()} Great Pyramids`;
+    if (m3 < GENEVA_M3) { const n = m3 / PYRAMID_M3; return `${n < 10 ? n.toFixed(1) : sig3(n).toLocaleString()} Great Pyramids`; }
+    const n = m3 / GENEVA_M3;
+    return `${n < 10 ? n.toFixed(1) : sig3(n).toLocaleString()} × Lake Geneva`;
   }
   // The base level where total cut equals total fill. Net volume falls steadily as the base rises,
   // so bisection finds it; recomputed only when the terrain or exaggeration changes.
@@ -1453,10 +1471,10 @@
       html = `At <b>${B}</b>, ${site} fills its own hollows.<span class="v-cmp">Nothing leaves. Nothing arrives.</span>`;
     } else if (N > 0) {
       state = 'surplus';
-      html = `Level ${site} at <b>${B}</b> and <span class="v-vol cut" style="font-weight:${weight(N)}">${volWords(N, settled)} m³</span> of earth walks away.<span class="v-cmp">${compareVol(N)}.</span>`;
+      html = `Level ${site} at <b>${B}</b> and <span class="v-vol cut" style="font-weight:${weight(N)}">${volWords(N, settled)}</span> of earth walks away.<span class="v-cmp">${compareVol(N)}.</span>`;
     } else {
       state = 'short';
-      html = `Raise ${site} to <b>${B}</b> and the ground is <span class="v-vol fill" style="font-weight:${weight(-N)}">${volWords(-N, settled)} m³</span> hungry.<span class="v-cmp">${compareVol(-N)} of fill.</span>`;
+      html = `Raise ${site} to <b>${B}</b> and the ground is <span class="v-vol fill" style="font-weight:${weight(-N)}">${volWords(-N, settled)}</span> hungry.<span class="v-cmp">${compareVol(-N)} of fill.</span>`;
     }
     if (state !== verdictState && verdictState) {
       // a new state crossfades; numbers inside a state just tick
@@ -2280,7 +2298,7 @@
     } catch (err) {
       // Mapterhorn's lidar zooms (13+) only exist where a country publishes lidar; step down a
       // zoom and show it on the slider, so the view says what was actually loaded
-      if (DEM_SOURCE === 'mapterhorn' && z > 12) {
+      if (z > (DEM_SOURCE === 'mapterhorn' ? 12 : 8)) {
         const c = tileCenterLatLon(x, y, z);
         const t = latLonToTile(c.lat, c.lon, z - 1);
         zoomSlider.value = z - 1; zoomLabel.textContent = z - 1; syncFill(zoomSlider);
