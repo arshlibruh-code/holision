@@ -2771,7 +2771,7 @@
   const SEQ = [
     { name: 'camera',   start:    0, dur: 3500 },
     { name: 'cut',      start: 1000, dur: 2500 },
-    { name: 'base',     start: 3500, dur: 2000 },
+    { name: 'base',     start: 2250, dur: 2000 },
   ];
 
   let seqStart = -1, seqFrame = 0, seqFinished = false;
@@ -2866,7 +2866,7 @@
         offsetSlider.value = CUT_OFFSET;
         offsetLabel.textContent = `${(CUT_OFFSET * UNIT_SCALE).toFixed(1)} m`;
         syncFill(offsetSlider);
-        applyBase(BASE_Y);
+        if (!heavyDirty) applyBase(BASE_Y);
       }
       if (heavyDirty) {
         slider.value = BASE_Y;
