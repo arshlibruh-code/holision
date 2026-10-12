@@ -194,6 +194,21 @@
 
     /* toggles */
     .toggles { display:flex; gap:5px; flex-wrap:wrap; }
+    #ctrl-panel .fp { gap:0; }
+    .sec { border-top:1px solid rgba(255,255,255,0.07); }
+    .sec:first-child { border-top:none; }
+    .sec > summary { list-style:none; display:flex; align-items:center; gap:8px; padding:9px 2px; cursor:pointer; user-select:none; }
+    .sec > summary::-webkit-details-marker { display:none; }
+    .sec-chev { width:6px; height:6px; border-right:1.5px solid rgba(255,255,255,0.45); border-bottom:1.5px solid rgba(255,255,255,0.45); transform:rotate(-45deg); transition:transform .2s; margin:0 3px 0 1px; flex-shrink:0; }
+    .sec[open] > summary .sec-chev { transform:rotate(45deg); }
+    .sec-title { font-family:'Share Tech', sans-serif; font-size:10px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:rgba(255,255,255,0.8); white-space:nowrap; }
+    .sec-sum { margin-left:auto; min-width:0; font-family:'Share Tech Mono', monospace; font-size:10px; letter-spacing:-0.02em; color:rgba(255,255,255,0.38); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sec-body { display:flex; flex-direction:column; gap:6px; padding:0 0 10px; }
+    #base-row { min-height:36px; }
+    #base-row .csr-label { color:rgba(255,255,255,0.85); }
+    #base-row .csr-val { font-size:15px; color:#fff; }
+    .sec .pan-grid { justify-content:space-between; }
+    .sec .compass-rose { width:74px; height:44px; }
     .tog-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; }
     .tog-grid .tog { text-align:center; padding:4px 6px; }
     .tog { font-size:11px; padding:4px 11px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.35); border-radius:2px; cursor:pointer; white-space:nowrap; font-family:'Share Tech', sans-serif; font-weight:700; letter-spacing:0.04em; transition:all 0.15s; }
@@ -475,182 +490,194 @@
 
 <div class="panel-zone" id="ctrl-panel">
   <div class="fp">
-    <div class="grp">
-      <div class="fp-row" style="align-items:center;">
-        <div class="fc-lbl">Site</div>
-        <select id="site-select" class="site-sel">
-          <option value="bingham">Bingham Canyon Mine</option>
-          <option value="grand-canyon">Grand Canyon</option>
-          <option value="everest">Mount Everest</option>
-          <option value="matterhorn">Matterhorn</option>
-          <option value="mont-blanc">Mont Blanc</option>
-          <option value="half-dome">Half Dome / Yosemite</option>
-          <option value="mount-fuji">Mount Fuji</option>
-          <option value="kilimanjaro">Kilimanjaro</option>
-          <option value="vesuvius">Vesuvius</option>
-          <option value="death-valley">Death Valley</option>
-          <option value="hvannadalshnjukur">Hvannadalshnjúkur</option>
-          <option value="hambach">Hambach mine</option>
-          <option value="corta-atalaya">Corta Atalaya</option>
-          <option value="st-helens">Mount St. Helens</option>
-          <option value="eiger">Eiger</option>
-          <option value="preikestolen">Preikestolen</option>
-          <option value="sakurajima">Sakurajima</option>
-          <option value="hoover-dam">Hoover Dam</option>
-          <option value="kilauea">Kīlauea</option>
-          <option value="custom">Custom…</option>
-        </select>
-        <button id="loc-btn" class="util-btn" title="use camera for live depth">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
+    <details class="sec" id="sec-design" open>
+      <summary><span class="sec-chev"></span><span class="sec-title">Design level</span><span class="sec-sum" id="sum-design"></span></summary>
+      <div class="sec-body">
+          <div class="csr" id="base-row">
+            <div class="csr-fill"></div>
+            <span class="csr-label">Base Level</span>
+            <span class="csr-val" id="base-label">0.10 m</span>
+            <input type="range" id="base-slider" min="-2" max="6" step="0.05" value="0.1">
+          </div>
+          <div class="csr cut-sl">
+            <div class="csr-fill"></div>
+            <input type="color" class="cs" id="cut-color" title="cut colour">
+            <span class="csr-label">Cut Depth</span>
+            <span class="csr-val" id="offset-label">0.0 m</span>
+            <input type="range" id="offset-slider" min="0" max="20" step="0.05" value="0">
+          </div>
+          <div class="csr fill-sl">
+            <div class="csr-fill"></div>
+            <input type="color" class="cs" id="fill-color" title="fill colour">
+            <span class="csr-label">Fill Depth</span>
+            <span class="csr-val" id="fill-offset-label">0.0 m</span>
+            <input type="range" id="fill-offset-slider" min="0" max="20" step="0.05" value="0">
+          </div>
       </div>
-      <div class="csr" id="site-custom-row">
-        <span class="csr-label" style="flex:0 0 auto; white-space:nowrap; margin-right:8px;">Lat, Lon</span>
-        <input type="text" id="site-latlon" placeholder="40.52, -112.15" class="latlon-input">
+    </details>
+    <details class="sec" id="sec-site" open>
+      <summary><span class="sec-chev"></span><span class="sec-title">Site</span><span class="sec-sum" id="sum-site"></span></summary>
+      <div class="sec-body">
+          <div class="fp-row" style="align-items:center;">
+            <div class="fc-lbl">Site</div>
+            <select id="site-select" class="site-sel">
+              <option value="bingham">Bingham Canyon Mine</option>
+              <option value="grand-canyon">Grand Canyon</option>
+              <option value="everest">Mount Everest</option>
+              <option value="matterhorn">Matterhorn</option>
+              <option value="mont-blanc">Mont Blanc</option>
+              <option value="half-dome">Half Dome / Yosemite</option>
+              <option value="mount-fuji">Mount Fuji</option>
+              <option value="kilimanjaro">Kilimanjaro</option>
+              <option value="vesuvius">Vesuvius</option>
+              <option value="death-valley">Death Valley</option>
+              <option value="hvannadalshnjukur">Hvannadalshnjúkur</option>
+              <option value="hambach">Hambach mine</option>
+              <option value="corta-atalaya">Corta Atalaya</option>
+              <option value="st-helens">Mount St. Helens</option>
+              <option value="eiger">Eiger</option>
+              <option value="preikestolen">Preikestolen</option>
+              <option value="sakurajima">Sakurajima</option>
+              <option value="hoover-dam">Hoover Dam</option>
+              <option value="kilauea">Kīlauea</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <button id="loc-btn" class="util-btn" title="use camera for live depth">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </button>
+          </div>
+          <div class="csr" id="site-custom-row">
+            <span class="csr-label" style="flex:0 0 auto; white-space:nowrap; margin-right:8px;">Lat, Lon</span>
+            <input type="text" id="site-latlon" placeholder="40.52, -112.15" class="latlon-input">
+          </div>
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <span class="csr-label">Zoom</span>
+            <span class="csr-val" id="zoom-label">13</span>
+            <input type="range" id="zoom-slider" min="8" max="16" step="1" value="13">
+          </div>
+          <div class="fp-row" style="align-items:center;">
+            <div class="fc-lbl">Data</div>
+            <select id="dem-select" class="site-sel">
+              <option value="mapterhorn">Mapterhorn (lidar to 0.4 m)</option>
+              <option value="aws">AWS Terrain Tiles (30 m)</option>
+            </select>
+          </div>
+          <div class="fp-row" style="align-items:center;">
+            <div class="fc-lbl">Shape</div>
+            <div class="shape-seg" id="shape-seg"></div>
+          </div>
+          <div class="pan-grid">
+            <div class="fc-lbl">Move tile</div>
+            <svg class="compass-rose" aria-label="Shift terrain one tile" viewBox="0 0 92 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g class="pan pan-up">
+                <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M45.9141 1.41406L47.4141 2.91406L60.9141 16.4141L62.4141 17.9141V25.4141H47.4141H44.4141H29.4141V17.9141L30.9141 16.4141L44.4141 2.91406L45.9141 1.41406Z"/>
+                <path class="ltr" d="M47.7939 10.4141V15.6504H46.8376L44.5595 12.3547H44.5212V15.6504H43.4141V10.4141H44.3857L46.6459 13.7072H46.6919V10.4141H47.7939Z"/>
+              </g>
+              <g class="pan pan-down">
+                <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M45.9141 53.4141L47.4141 51.9141L60.9141 38.4141L62.4141 36.9141V29.4141H47.4141H44.4141H29.4141V36.9141L30.9141 38.4141L44.4141 51.9141L45.9141 53.4141Z"/>
+                <path class="ltr" d="M46.4234 39.9916C46.403 39.7854 46.3152 39.6251 46.1601 39.5109C46.005 39.3967 45.7945 39.3396 45.5286 39.3396C45.3479 39.3396 45.1953 39.3652 45.0709 39.4163C44.9464 39.4658 44.851 39.5348 44.7845 39.6234C44.7197 39.7121 44.6874 39.8126 44.6874 39.9251C44.6839 40.0189 44.7036 40.1007 44.7462 40.1706C44.7905 40.2405 44.851 40.301 44.9277 40.3521C45.0044 40.4016 45.093 40.445 45.1936 40.4825C45.2942 40.5183 45.4016 40.549 45.5158 40.5746L45.9862 40.6871C46.2146 40.7382 46.4243 40.8064 46.6152 40.8916C46.8061 40.9768 46.9714 41.0817 47.1112 41.2061C47.251 41.3305 47.3592 41.4771 47.4359 41.6459C47.5143 41.8146 47.5544 42.0081 47.5561 42.2263C47.5544 42.5467 47.4726 42.8246 47.3107 43.0598C47.1504 43.2933 46.9186 43.4749 46.6152 43.6044C46.3135 43.7322 45.9496 43.7962 45.5234 43.7962C45.1007 43.7962 44.7325 43.7314 44.4189 43.6018C44.107 43.4723 43.8632 43.2805 43.6876 43.0266C43.5138 42.7709 43.4226 42.4547 43.4141 42.078H44.4854C44.4973 42.2536 44.5476 42.4001 44.6362 42.5178C44.7266 42.6337 44.8467 42.7214 44.9967 42.7811C45.1484 42.8391 45.3197 42.868 45.5107 42.868C45.6982 42.868 45.8609 42.8408 45.999 42.7862C46.1388 42.7317 46.247 42.6558 46.3237 42.5587C46.4004 42.4615 46.4388 42.3499 46.4388 42.2237C46.4388 42.1061 46.4038 42.0072 46.3339 41.9271C46.2658 41.847 46.1652 41.7788 46.0322 41.7226C45.901 41.6663 45.7399 41.6152 45.549 41.5692L44.9788 41.426C44.5374 41.3186 44.1888 41.1507 43.9331 40.9223C43.6774 40.6939 43.5504 40.3862 43.5521 39.9993C43.5504 39.6822 43.6348 39.4053 43.8053 39.1683C43.9774 38.9314 44.2135 38.7464 44.5135 38.6135C44.8135 38.4805 45.1544 38.4141 45.5362 38.4141C45.9249 38.4141 46.2641 38.4805 46.5538 38.6135C46.8453 38.7464 47.072 38.9314 47.2339 39.1683C47.3959 39.4053 47.4794 39.6797 47.4845 39.9916H46.4234Z"/>
+              </g>
+              <g class="pan pan-right">
+                <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M90.4141 28.9141L88.9141 30.4141L75.4141 43.9141L73.9141 45.4141L66.4141 45.4141L66.4141 30.4141L66.4141 27.4141L66.4141 12.4141L73.9141 12.4141L75.4141 13.9141L88.9141 27.4141L90.4141 28.9141Z"/>
+                <path class="ltr" d="M75.4141 31.6504V26.4141H78.9425V27.3268H76.5212V28.5746H78.7609V29.4874H76.5212V30.7376H78.9527V31.6504H75.4141Z"/>
+              </g>
+              <g class="pan pan-left">
+                <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M1.41406 29.9141L2.91406 31.4141L16.4141 44.9141L17.9141 46.4141L25.4141 46.4141L25.4141 31.4141L25.4141 28.4141L25.4141 13.4141L17.9141 13.4141L16.4141 14.9141L2.91406 28.4141L1.41406 29.9141Z"/>
+                <path class="ltr" d="M10.9124 32.6504L9.41406 27.4141H10.6234L11.4902 31.0524H11.5337L12.4899 27.4141H13.5254L14.4791 31.0601H14.5251L15.3919 27.4141H16.6013L15.103 32.6504H14.024L13.0268 29.2268H12.9859L11.9913 32.6504H10.9124Z"/>
+              </g>
+            </svg>
+          </div>
       </div>
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <span class="csr-label">Zoom</span>
-        <span class="csr-val" id="zoom-label">13</span>
-        <input type="range" id="zoom-slider" min="8" max="16" step="1" value="13">
+    </details>
+    <details class="sec" id="sec-view" open>
+      <summary><span class="sec-chev"></span><span class="sec-title">View</span><span class="sec-sum" id="sum-view"></span></summary>
+      <div class="sec-body">
+          <div class="tog-grid" id="mode-btns">
+            <button data-mode="cut"     class="tog active" style="grid-column:span 2">Cut</button>
+            <button data-mode="fill"    class="tog active" style="grid-column:span 2">Fill</button>
+            <button data-mode="sat"     class="tog active" style="grid-column:span 2">Satellite</button>
+            <button data-mode="invert" id="invert-btn" class="tog" style="grid-column:span 2; display:none">Invert Depth</button>
+            <button data-mode="ann"     class="tog active" style="grid-column:span 2">Annotations</button>
+            <button data-mode="lines"   class="tog active" style="grid-column:span 2">Contours</button>
+            <button data-mode="contour" class="tog active" style="grid-column:span 2">Contour Labels</button>
+          </div>
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <span class="csr-label">Exaggeration</span>
+            <span class="csr-val" id="exag-label">1.0×</span>
+            <input type="range" id="exag-slider" min="0.5" max="5" step="0.1" value="1">
+          </div>
+          <div class="csr off" id="spin-row">
+            <div class="csr-fill"></div>
+            <span class="csr-label">Spin speed</span>
+            <span class="csr-val" id="spin-label">0.6×</span>
+            <input type="range" id="spin-slider" min="0.1" max="3" step="0.1" value="0.6" disabled>
+          </div>
       </div>
-      <div class="fp-row" style="align-items:center;">
-        <div class="fc-lbl">Data</div>
-        <select id="dem-select" class="site-sel">
-          <option value="mapterhorn">Mapterhorn (lidar to 0.4 m)</option>
-          <option value="aws">AWS Terrain Tiles (30 m)</option>
-        </select>
+    </details>
+    <details class="sec" id="sec-contours">
+      <summary><span class="sec-chev"></span><span class="sec-title">Contours</span><span class="sec-sum" id="sum-contours"></span></summary>
+      <div class="sec-body">
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <span class="csr-label">Minor Interval</span>
+            <span class="csr-val" id="minor-label">0.15 m</span>
+            <input type="range" id="minor-slider" min="0.01" max="1.2" step="0.01" value="0.15">
+          </div>
+          <div class="fp-row" style="align-items:center;">
+            <div class="fc-lbl">Major Interval</div>
+            <div class="maj-btns" id="major-btns">
+              <button data-n="2"  class="maj">×2</button>
+              <button data-n="3"  class="maj">×3</button>
+              <button data-n="5"  class="maj">×5</button>
+              <button data-n="10" class="maj active">×10</button>
+            </div>
+          </div>
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <input type="color" class="cs" id="minor-color" value="#ffffff">
+            <span class="csr-label">Minor Lines</span>
+            <span class="csr-val" id="minor-opacity-val">0.12</span>
+            <input type="range" id="minor-opacity" min="0" max="1" step="0.05" value="0.12">
+          </div>
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <input type="color" class="cs" id="major-color" value="#ffffff">
+            <span class="csr-label">Major Lines</span>
+            <span class="csr-val" id="major-opacity-val">1.00</span>
+            <input type="range" id="major-opacity" min="0" max="1" step="0.05" value="1">
+          </div>
       </div>
-      <div class="fp-row" style="align-items:center;">
-        <div class="fc-lbl">Shape</div>
-        <div class="shape-seg" id="shape-seg"></div>
+    </details>
+    <details class="sec" id="sec-walls">
+      <summary><span class="sec-chev"></span><span class="sec-title">Walls</span><span class="sec-sum" id="sum-walls"></span></summary>
+      <div class="sec-body">
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <span class="csr-label">Wall Density</span>
+            <span class="csr-val" id="wall-label">0.50 m</span>
+            <input type="range" id="wall-slider" min="0.2" max="5" step="0.1" value="0.5">
+          </div>
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <input type="color" class="cs" id="wall-top-color" value="#ff0000">
+            <span class="csr-label">Wall Top Color</span>
+            <span class="csr-val" id="wall-top-alpha-val">0.10</span>
+            <input type="range" id="wall-top-alpha" min="0" max="1" step="0.05" value="0.1">
+          </div>
+          <div class="csr">
+            <div class="csr-fill"></div>
+            <input type="color" class="cs" id="wall-bot-color" value="#000000">
+            <span class="csr-label">Wall Bottom Color</span>
+            <span class="csr-val" id="wall-bot-alpha-val">0.00</span>
+            <input type="range" id="wall-bot-alpha" min="0" max="1" step="0.05" value="0">
+          </div>
       </div>
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <span class="csr-label">Exaggeration</span>
-        <span class="csr-val" id="exag-label">1.0×</span>
-        <input type="range" id="exag-slider" min="0.5" max="5" step="0.1" value="1">
-      </div>
-      <div class="csr off" id="spin-row">
-        <div class="csr-fill"></div>
-        <span class="csr-label">Spin speed</span>
-        <span class="csr-val" id="spin-label">0.6×</span>
-        <input type="range" id="spin-slider" min="0.1" max="3" step="0.1" value="0.6" disabled>
-      </div>
-      <div class="pan-grid">
-        <div class="nav-info">
-          <p class="nav-desc">Shift terrain one tile<br>in any cardinal direction</p>
-        </div>
-        <svg class="compass-rose" viewBox="0 0 92 55" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <g class="pan pan-up">
-            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M45.9141 1.41406L47.4141 2.91406L60.9141 16.4141L62.4141 17.9141V25.4141H47.4141H44.4141H29.4141V17.9141L30.9141 16.4141L44.4141 2.91406L45.9141 1.41406Z"/>
-            <path class="ltr" d="M47.7939 10.4141V15.6504H46.8376L44.5595 12.3547H44.5212V15.6504H43.4141V10.4141H44.3857L46.6459 13.7072H46.6919V10.4141H47.7939Z"/>
-          </g>
-          <g class="pan pan-down">
-            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M45.9141 53.4141L47.4141 51.9141L60.9141 38.4141L62.4141 36.9141V29.4141H47.4141H44.4141H29.4141V36.9141L30.9141 38.4141L44.4141 51.9141L45.9141 53.4141Z"/>
-            <path class="ltr" d="M46.4234 39.9916C46.403 39.7854 46.3152 39.6251 46.1601 39.5109C46.005 39.3967 45.7945 39.3396 45.5286 39.3396C45.3479 39.3396 45.1953 39.3652 45.0709 39.4163C44.9464 39.4658 44.851 39.5348 44.7845 39.6234C44.7197 39.7121 44.6874 39.8126 44.6874 39.9251C44.6839 40.0189 44.7036 40.1007 44.7462 40.1706C44.7905 40.2405 44.851 40.301 44.9277 40.3521C45.0044 40.4016 45.093 40.445 45.1936 40.4825C45.2942 40.5183 45.4016 40.549 45.5158 40.5746L45.9862 40.6871C46.2146 40.7382 46.4243 40.8064 46.6152 40.8916C46.8061 40.9768 46.9714 41.0817 47.1112 41.2061C47.251 41.3305 47.3592 41.4771 47.4359 41.6459C47.5143 41.8146 47.5544 42.0081 47.5561 42.2263C47.5544 42.5467 47.4726 42.8246 47.3107 43.0598C47.1504 43.2933 46.9186 43.4749 46.6152 43.6044C46.3135 43.7322 45.9496 43.7962 45.5234 43.7962C45.1007 43.7962 44.7325 43.7314 44.4189 43.6018C44.107 43.4723 43.8632 43.2805 43.6876 43.0266C43.5138 42.7709 43.4226 42.4547 43.4141 42.078H44.4854C44.4973 42.2536 44.5476 42.4001 44.6362 42.5178C44.7266 42.6337 44.8467 42.7214 44.9967 42.7811C45.1484 42.8391 45.3197 42.868 45.5107 42.868C45.6982 42.868 45.8609 42.8408 45.999 42.7862C46.1388 42.7317 46.247 42.6558 46.3237 42.5587C46.4004 42.4615 46.4388 42.3499 46.4388 42.2237C46.4388 42.1061 46.4038 42.0072 46.3339 41.9271C46.2658 41.847 46.1652 41.7788 46.0322 41.7226C45.901 41.6663 45.7399 41.6152 45.549 41.5692L44.9788 41.426C44.5374 41.3186 44.1888 41.1507 43.9331 40.9223C43.6774 40.6939 43.5504 40.3862 43.5521 39.9993C43.5504 39.6822 43.6348 39.4053 43.8053 39.1683C43.9774 38.9314 44.2135 38.7464 44.5135 38.6135C44.8135 38.4805 45.1544 38.4141 45.5362 38.4141C45.9249 38.4141 46.2641 38.4805 46.5538 38.6135C46.8453 38.7464 47.072 38.9314 47.2339 39.1683C47.3959 39.4053 47.4794 39.6797 47.4845 39.9916H46.4234Z"/>
-          </g>
-          <g class="pan pan-right">
-            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M90.4141 28.9141L88.9141 30.4141L75.4141 43.9141L73.9141 45.4141L66.4141 45.4141L66.4141 30.4141L66.4141 27.4141L66.4141 12.4141L73.9141 12.4141L75.4141 13.9141L88.9141 27.4141L90.4141 28.9141Z"/>
-            <path class="ltr" d="M75.4141 31.6504V26.4141H78.9425V27.3268H76.5212V28.5746H78.7609V29.4874H76.5212V30.7376H78.9527V31.6504H75.4141Z"/>
-          </g>
-          <g class="pan pan-left">
-            <path class="fin" fill-rule="evenodd" clip-rule="evenodd" d="M1.41406 29.9141L2.91406 31.4141L16.4141 44.9141L17.9141 46.4141L25.4141 46.4141L25.4141 31.4141L25.4141 28.4141L25.4141 13.4141L17.9141 13.4141L16.4141 14.9141L2.91406 28.4141L1.41406 29.9141Z"/>
-            <path class="ltr" d="M10.9124 32.6504L9.41406 27.4141H10.6234L11.4902 31.0524H11.5337L12.4899 27.4141H13.5254L14.4791 31.0601H14.5251L15.3919 27.4141H16.6013L15.103 32.6504H14.024L13.0268 29.2268H12.9859L11.9913 32.6504H10.9124Z"/>
-          </g>
-        </svg>
-      </div>
-      <div class="tog-grid" id="mode-btns">
-        <button data-mode="cut"     class="tog active" style="grid-column:span 2">Cut</button>
-        <button data-mode="fill"    class="tog active" style="grid-column:span 2">Fill</button>
-        <button data-mode="sat"     class="tog active" style="grid-column:span 2">Satellite</button>
-        <button data-mode="invert" id="invert-btn" class="tog" style="grid-column:span 2; display:none">Invert Depth</button>
-        <button data-mode="ann"     class="tog active" style="grid-column:span 2">Annotations</button>
-        <button data-mode="lines"   class="tog active" style="grid-column:span 2">Contours</button>
-        <button data-mode="contour" class="tog active" style="grid-column:span 2">Contour Labels</button>
-      </div>
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <span class="csr-label">Base Level</span>
-        <span class="csr-val" id="base-label">0.10 m</span>
-        <input type="range" id="base-slider" min="-2" max="6" step="0.05" value="0.1">
-      </div>
-    </div>
-
-    <div class="grp">
-      <div class="csr cut-sl">
-        <div class="csr-fill"></div>
-        <input type="color" class="cs" id="cut-color" title="cut colour">
-        <span class="csr-label">Cut Depth</span>
-        <span class="csr-val" id="offset-label">0.0 m</span>
-        <input type="range" id="offset-slider" min="0" max="20" step="0.05" value="0">
-      </div>
-      <div class="csr fill-sl">
-        <div class="csr-fill"></div>
-        <input type="color" class="cs" id="fill-color" title="fill colour">
-        <span class="csr-label">Fill Depth</span>
-        <span class="csr-val" id="fill-offset-label">0.0 m</span>
-        <input type="range" id="fill-offset-slider" min="0" max="20" step="0.05" value="0">
-      </div>
-    </div>
-
-    <div class="grp">
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <span class="csr-label">Wall Density</span>
-        <span class="csr-val" id="wall-label">0.50 m</span>
-        <input type="range" id="wall-slider" min="0.2" max="5" step="0.1" value="0.5">
-      </div>
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <input type="color" class="cs" id="wall-top-color" value="#ff0000">
-        <span class="csr-label">Wall Top Color</span>
-        <span class="csr-val" id="wall-top-alpha-val">0.10</span>
-        <input type="range" id="wall-top-alpha" min="0" max="1" step="0.05" value="0.1">
-      </div>
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <input type="color" class="cs" id="wall-bot-color" value="#000000">
-        <span class="csr-label">Wall Bottom Color</span>
-        <span class="csr-val" id="wall-bot-alpha-val">0.00</span>
-        <input type="range" id="wall-bot-alpha" min="0" max="1" step="0.05" value="0">
-      </div>
-    </div>
-
-    <div class="grp">
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <span class="csr-label">Minor Interval</span>
-        <span class="csr-val" id="minor-label">0.15 m</span>
-        <input type="range" id="minor-slider" min="0.01" max="1.2" step="0.01" value="0.15">
-      </div>
-      <div class="fp-row" style="align-items:center;">
-        <div class="fc-lbl">Major Interval</div>
-        <div class="maj-btns" id="major-btns">
-          <button data-n="2"  class="maj">×2</button>
-          <button data-n="3"  class="maj">×3</button>
-          <button data-n="5"  class="maj">×5</button>
-          <button data-n="10" class="maj active">×10</button>
-        </div>
-      </div>
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <input type="color" class="cs" id="minor-color" value="#ffffff">
-        <span class="csr-label">Minor Lines</span>
-        <span class="csr-val" id="minor-opacity-val">0.12</span>
-        <input type="range" id="minor-opacity" min="0" max="1" step="0.05" value="0.12">
-      </div>
-      <div class="csr">
-        <div class="csr-fill"></div>
-        <input type="color" class="cs" id="major-color" value="#ffffff">
-        <span class="csr-label">Major Lines</span>
-        <span class="csr-val" id="major-opacity-val">1.00</span>
-        <input type="range" id="major-opacity" min="0" max="1" step="0.05" value="1">
-      </div>
-    </div>
+    </details>
   </div>
 </div>
 
@@ -1400,13 +1427,8 @@
     if (cutAnn) setVolumeTarget('cut', detectIslands(baseY));
   }
 
-  // While a volume is changing, show 3 significant figures so the number doesn't shimmer
-  function fmtVol(v, settled) {
-    const m = Math.round(v * VOL_SCALE);
-    if (settled || m === 0) return m.toLocaleString();
-    const p = 10 ** Math.max(0, Math.floor(Math.log10(Math.abs(m))) - 2);
-    return (Math.round(m / p) * p).toLocaleString();
-  }
+  // Every elevation label: thousands separator, 0.1 m
+  function fmtM(m) { return `${m.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m`; }
 
   // The verdict: one sentence saying what the base level means for this ground.
   // Pool: 50 x 25 x 2 m = 2,500 m3. Great Pyramid: about 2.6 million m3 (Wikipedia).
@@ -1461,7 +1483,7 @@
     if (!show) return;
     const settled = now - Math.max(c.changedAt, f.changedAt) > 300;
     const site = loadedSiteName ?? 'this ground';
-    const B = `${Math.round(BASE_Y * UNIT_SCALE).toLocaleString()} m`;
+    const B = fmtM(BASE_Y * UNIT_SCALE);
     // heavier type for bigger volumes: 1,000 m3 reads light, a billion reads heavy
     const weight = m3 => Math.round(Math.min(800, Math.max(300, 300 + (Math.log10(Math.max(m3, 1)) - 3) * 85)));
     let state, html;
@@ -1521,7 +1543,7 @@
       const endY = cy + up * TRUNK;
       tp.setXYZ(0, cx, cy, cz); tp.setXYZ(1, cx, endY, cz); tp.needsUpdate = true;
       ann.obj.position.set(cx, endY, cz);
-      const text = `${fmtVol(r.total, now - r.changedAt > 300)} m³`;
+      const text = volWords(r.total * VOL_SCALE, now - r.changedAt > 300);
       if (text !== r.shown) { ann.lbl.textContent = cut ? 'Cut' : 'Fill'; ann.val.textContent = text; r.shown = text; }
       ann.div.style.opacity = '1';
       mid.set(cx, (cy + endY) / 2, cz);
@@ -1845,7 +1867,7 @@
         const d = contourCandidates[i];
         const offY = d.type === 'cut' ? CUT_OFFSET : -FILL_OFFSET;
         entry.obj.position.set(d.x, d.y + offY, d.z);
-        entry.div.textContent = `${(d.level * UNIT_SCALE).toFixed(1)} m`;
+        entry.div.textContent = `${fmtM(d.level * UNIT_SCALE)}`;
       } else {
         entry.div.style.opacity = '0';
       }
@@ -1924,7 +1946,7 @@
 
     netAnn.obj.position.set(meetX, meetY, meetZ);
     const net = cutTotalVol - fillTotalVol;
-    netAnn.lbl.textContent = 'Net'; netAnn.val.textContent = `${net >= 0 ? '+' : ''}${fmtVol(Math.abs(net), performance.now() - Math.max(annRig.cut.changedAt, annRig.fill.changedAt) > 300)} m³`;
+    netAnn.lbl.textContent = 'Net'; netAnn.val.textContent = `${net >= 0 ? '+' : '−'}${volWords(Math.abs(net) * VOL_SCALE, performance.now() - Math.max(annRig.cut.changedAt, annRig.fill.changedAt) > 300)}`;
     netAnn.div.className = 'ann-label-net';
     netAnn.div.style.opacity = '1';
     netLineTgt = 0.55;
@@ -1942,7 +1964,7 @@
     bp.setXYZ(2, b3x, b3y, b3z);
     bp.needsUpdate = true;
     baseAnn.obj.position.set(b3x, b3y, b3z);
-    baseAnn.lbl.textContent = 'Base Surface'; baseAnn.val.textContent = `${(baseY * UNIT_SCALE).toFixed(1)} m`;
+    baseAnn.lbl.textContent = 'Base Surface'; baseAnn.val.textContent = `${fmtM(baseY * UNIT_SCALE)}`;
     annDirData.base.v2.set(b2x, b2y, b2z);
     annDirData.base.v3.set(b3x, b3y, b3z);
 
@@ -1960,7 +1982,7 @@
     pp.setXYZ(2, p3x, p3y,  p3z);
     pp.needsUpdate = true;
     peakAnn.obj.position.set(p3x, p3y, p3z);
-    peakAnn.lbl.textContent = 'Peak'; peakAnn.val.textContent = `${(webcamActive || SHAPE !== 'square' ? maxH * UNIT_SCALE : elevData.max).toFixed(1)} m`;
+    peakAnn.lbl.textContent = 'Peak'; peakAnn.val.textContent = `${fmtM(webcamActive || SHAPE !== 'square' ? maxH * UNIT_SCALE : elevData.max)}`;
     annDirData.peak.v2.set(p2x, p2y, p2z);
     annDirData.peak.v3.set(p3x, p3y, p3z);
 
@@ -1978,7 +2000,7 @@
     lp.setXYZ(2, l3x, l3y,  l3z);
     lp.needsUpdate = true;
     lowAnn.obj.position.set(l3x, l3y, l3z);
-    lowAnn.lbl.textContent = 'Low'; lowAnn.val.textContent = `${(webcamActive || SHAPE !== 'square' ? minH * UNIT_SCALE : elevData.min).toFixed(1)} m`;
+    lowAnn.lbl.textContent = 'Low'; lowAnn.val.textContent = `${fmtM(webcamActive || SHAPE !== 'square' ? minH * UNIT_SCALE : elevData.min)}`;
     annDirData.low.v2.set(l2x, l2y, l2z);
     annDirData.low.v3.set(l3x, l3y, l3z);
 
@@ -2605,7 +2627,7 @@
   syncFill(offsetSlider);
   offsetSlider.addEventListener('input', () => {
     CUT_OFFSET = parseFloat(offsetSlider.value);
-    offsetLabel.textContent = `${(CUT_OFFSET * UNIT_SCALE).toFixed(1)} m`;
+    offsetLabel.textContent = `${fmtM(CUT_OFFSET * UNIT_SCALE)}`;
     syncFill(offsetSlider);
     cwu.uCutOffset.value = CUT_OFFSET;
     fwu.uCutOffset.value = CUT_OFFSET;
@@ -2617,7 +2639,7 @@
   syncFill(fillOffsetSlider);
   fillOffsetSlider.addEventListener('input', () => {
     FILL_OFFSET = parseFloat(fillOffsetSlider.value);
-    fillOffsetLabel.textContent = `${(FILL_OFFSET * UNIT_SCALE).toFixed(1)} m`;
+    fillOffsetLabel.textContent = `${fmtM(FILL_OFFSET * UNIT_SCALE)}`;
     syncFill(fillOffsetSlider);
     cwu.uFillOffset.value = FILL_OFFSET;
     fwu.uFillOffset.value = FILL_OFFSET;
@@ -2630,7 +2652,7 @@
   const rafWall = rafThrottle(() => { lastBaseY = -Infinity; applyBase(BASE_Y); });
   wallSlider.addEventListener('input', () => {
     wallSpacing = parseFloat(wallSlider.value);
-    wallLabel.textContent = `${(wallSpacing * UNIT_SCALE).toFixed(1)} m`;
+    wallLabel.textContent = `${fmtM(wallSpacing * UNIT_SCALE)}`;
     syncFill(wallSlider);
     rafWall();
   });
@@ -2704,7 +2726,7 @@
   const rafMinor = rafThrottle(() => { lastBaseY = -Infinity; applyBase(BASE_Y); });
   minorSlider.addEventListener('input', () => {
     MINOR_INTERVAL = parseFloat(minorSlider.value);
-    minorLabel.textContent = `${(MINOR_INTERVAL * UNIT_SCALE).toFixed(1)} m`;
+    minorLabel.textContent = `${fmtM(MINOR_INTERVAL * UNIT_SCALE)}`;
     syncFill(minorSlider);
     rafMinor();
   });
@@ -2725,7 +2747,7 @@
   let baseDebounceTid = null;
   slider.addEventListener('input', () => {
     BASE_Y = parseFloat(slider.value);
-    baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+    baseLabel.textContent = `${fmtM(BASE_Y * UNIT_SCALE)}`;
     syncFill(slider);
     if (base) base.position.y = BASE_Y;
     if (terrainShader) {
@@ -2800,6 +2822,21 @@
   });
   syncFill(spinSlider);
 
+  // Section summaries: what each section is set to, readable even when it is collapsed
+  function updatePanelSummaries() {
+    const txt = (id, t) => { const el = document.getElementById(id); if (el && el.textContent !== t) el.textContent = t; };
+    const c = annRig.cut, f = annRig.fill;
+    txt('sum-design', `${fmtM(BASE_Y * UNIT_SCALE)} · cut ${volWords((c.active ? c.total : 0) * VOL_SCALE, true)} · fill ${volWords((f.active ? f.total : 0) * VOL_SCALE, true)}`);
+    txt('sum-site', `${loadedSiteName ?? 'custom'} · z${currentTile.z} · ${DEM_SOURCES[DEM_SOURCE].name} · ${SHAPES[SHAPE].name}`);
+    const on = [...document.querySelectorAll('#mode-btns .tog.active')].map(b => b.textContent.trim()).filter(t => ['Cut', 'Fill', 'Satellite'].includes(t));
+    txt('sum-view', `${on.join(' + ') || 'none'} · ${EXAG.toFixed(1)}× · ${controls.autoRotate ? `spin ${controls.autoRotateSpeed.toFixed(1)}×` : 'still'}`);
+    txt('sum-contours', `${fmtM(MINOR_INTERVAL * UNIT_SCALE)} · ×${MAJOR_N}`);
+    txt('sum-walls', fmtM(wallSpacing * UNIT_SCALE));
+  }
+  setInterval(updatePanelSummaries, 300);
+  // phones open on the two sections that matter, so the terrain stays in view
+  if (window.innerWidth <= 768) document.getElementById('sec-view').open = false;
+
 
   let isAnimating = false;
   let animStart = 0;
@@ -2848,7 +2885,20 @@
   });
 
   function siteName() {
-    return (SITES[CURRENT_SITE]?.name ?? `${anchorLat.toFixed(4)},${anchorLon.toFixed(4)}`).replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    return (loadedSiteName ?? `${anchorLat.toFixed(4)},${anchorLon.toFixed(4)}`).replace(/[^a-z0-9]/gi, '-').toLowerCase();
+  }
+
+  // What every export carries: where, which data, and the numbers the scene shows
+  function exportSummary() {
+    const c = annRig.cut, f = annRig.fill;
+    const cut = (c.active ? c.total : 0) * VOL_SCALE, fill = (f.active ? f.total : 0) * VOL_SCALE;
+    return {
+      site: loadedSiteName, lat: +anchorLat.toFixed(6), lon: +anchorLon.toFixed(6), zoom: currentTile.z,
+      shape: SHAPE, data_source: DEM_SOURCES[DEM_SOURCE].name, credit: DEM_SOURCES[DEM_SOURCE].credit,
+      base_m: +(BASE_Y * UNIT_SCALE).toFixed(2),
+      cut_m3: Math.round(cut), fill_m3: Math.round(fill), net_m3: Math.round(cut - fill),
+      balance_m: balanceLevel() === null ? null : +(balanceLevel() * UNIT_SCALE).toFixed(2),
+    };
   }
 
   function sceneToLatLon(sx, sz) {
@@ -2862,21 +2912,25 @@
 
   function buildGeoJSON() {
     const features = [];
-    function addLayer(geo, layer) {
+    // one feature per contour level, with real elevation as the third coordinate
+    function addLayer(geo, layer, lift = 0) {
       const pos = geo.attributes.position;
       if (!pos || pos.count < 2) return;
-      const coords = [];
-      for (let i = 0; i + 1 < pos.count; i += 2)
-        coords.push([sceneToLatLon(pos.getX(i), pos.getZ(i)), sceneToLatLon(pos.getX(i+1), pos.getZ(i+1))]);
-      if (!coords.length) return;
-      features.push({ type: 'Feature', properties: { layer }, geometry: { type: 'MultiLineString', coordinates: coords } });
+      const byLevel = new Map();
+      for (let i = 0; i + 1 < pos.count; i += 2) {
+        const zm = +(((pos.getY(i) - lift) / EXAG) * UNIT_SCALE).toFixed(2);
+        if (!byLevel.has(zm)) byLevel.set(zm, []);
+        byLevel.get(zm).push([[...sceneToLatLon(pos.getX(i), pos.getZ(i)), zm], [...sceneToLatLon(pos.getX(i+1), pos.getZ(i+1)), zm]]);
+      }
+      for (const [zm, coords] of [...byLevel].sort((a, b) => a[0] - b[0]))
+        features.push({ type: 'Feature', properties: { layer, level_m: zm }, geometry: { type: 'MultiLineString', coordinates: coords } });
     }
     addLayer(ghostMinorGeo,    'contour-minor');
     addLayer(ghostMajorGeo,    'contour-major');
     addLayer(ghostFillMinorGeo,'contour-fill-minor');
     addLayer(ghostFillMajorGeo,'contour-fill-major');
-    addLayer(contourGeo,       'cut-boundary');
-    return JSON.stringify({ type: 'FeatureCollection', properties: { site: SITES[CURRENT_SITE]?.name ?? null, lat: anchorLat, lon: anchorLon, zoom: currentTile.z, base_m: +(BASE_Y * UNIT_SCALE).toFixed(2) }, features });
+    addLayer(contourGeo,       'cut-boundary', 0.02);
+    return JSON.stringify({ type: 'FeatureCollection', properties: exportSummary(), features });
   }
 
   function triggerDownload(content, filename, mime) {
@@ -2895,6 +2949,8 @@
 
   function buildDXF() {
     const out = [];
+    // summary as DXF comments (group code 999), which every reader skips
+    for (const [k, v] of Object.entries(exportSummary())) out.push(`999\nholision ${k}: ${v}`);
     out.push('0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n0\nENDSEC');
     out.push('0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n5');
     for (const [name, color] of [
@@ -2990,7 +3046,7 @@
     offsetSlider.value = 0;
     fillOffsetSlider.value = 0;
     slider.value = BASE_INTRO;
-    baseLabel.textContent = `${(BASE_INTRO * UNIT_SCALE).toFixed(1)} m`;
+    baseLabel.textContent = `${fmtM(BASE_INTRO * UNIT_SCALE)}`;
     offsetLabel.textContent = '0.0 m';
     fillOffsetLabel.textContent = '0.0 m';
     syncFill(offsetSlider); syncFill(fillOffsetSlider); syncFill(slider);
@@ -3005,7 +3061,7 @@
 
   BASE_Y = BASE_INTRO;
   slider.value = BASE_INTRO;
-  baseLabel.textContent = `${(BASE_INTRO * UNIT_SCALE).toFixed(1)} m`;
+  baseLabel.textContent = `${fmtM(BASE_INTRO * UNIT_SCALE)}`;
   syncFill(slider);
   applyBase(BASE_Y);
   camera.fov = 30; camera.updateProjectionMatrix();
@@ -3068,13 +3124,13 @@
 
       if (dirty) {
         offsetSlider.value = CUT_OFFSET;
-        offsetLabel.textContent = `${(CUT_OFFSET * UNIT_SCALE).toFixed(1)} m`;
+        offsetLabel.textContent = `${fmtM(CUT_OFFSET * UNIT_SCALE)}`;
         syncFill(offsetSlider);
         if (!heavyDirty) applyBase(BASE_Y);
       }
       if (heavyDirty) {
         slider.value = BASE_Y;
-        baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+        baseLabel.textContent = `${fmtM(BASE_Y * UNIT_SCALE)}`;
         syncFill(slider);
         applyBase(BASE_Y);
       }
@@ -3086,7 +3142,7 @@
       BASE_Y = mid + Math.sin((ts - animStart) / 6000 * Math.PI * 2) * amp;
       BASE_Y = Math.round(BASE_Y / 0.05) * 0.05;
       slider.value = BASE_Y;
-      baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+      baseLabel.textContent = `${fmtM(BASE_Y * UNIT_SCALE)}`;
       syncFill(slider);
       applyBase(BASE_Y);
     }
@@ -3104,7 +3160,7 @@
       if (Math.abs(BASE_Y - baseTweenTarget) < 0.025) { BASE_Y = baseTweenTarget; baseTweening = false; }
       BASE_Y = Math.round(BASE_Y / 0.05) * 0.05;
       slider.value = BASE_Y;
-      baseLabel.textContent = `${(BASE_Y * UNIT_SCALE).toFixed(1)} m`;
+      baseLabel.textContent = `${fmtM(BASE_Y * UNIT_SCALE)}`;
       syncFill(slider);
       applyBase(BASE_Y);
     }
